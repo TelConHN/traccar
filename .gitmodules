@@ -1,5 +1,5 @@
 [submodule "traccar-web"]
 	path = traccar-web
-	url = git@github-for-telconhn-admin:TelConHN/traccar-web.git
+	url = https://github.com/TelConHN/traccar-web.git
 	branch = master
 	ignore = all
