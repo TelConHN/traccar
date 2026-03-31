@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+
+<!--
+  Configuración mínima de Traccar.
+  Toda la configuración real (BD, logs, geocoder) viene de variables
+  de entorno definidas en docker-compose.yml gracias a:
+    CONFIG_USE_ENVIRONMENT_VARIABLES=true
+-->
+
+<properties>
+  <entry key='config.use_environment_variables'>true</entry>
+</properties>

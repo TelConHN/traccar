@@ -18,7 +18,7 @@ WORKDIR /frontend
 
 # Copiar dependencias primero — Docker cachea esta capa si package.json no cambia
 COPY traccar-web/package*.json ./
-RUN npm ci --prefer-offline
+RUN npm ci --prefer-offline --legacy-peer-deps
 
 # Copiar el código fuente del frontend y compilar
 COPY traccar-web/ ./
@@ -34,7 +34,8 @@ WORKDIR /build
 # Copiar el wrapper de Gradle primero — Docker cachea si build.gradle no cambia
 COPY gradlew ./
 COPY gradle/ ./gradle/
-RUN chmod +x gradlew
+# sed elimina los \r por si gradlew tiene saltos de línea Windows (CRLF)
+RUN sed -i 's/\r//' gradlew && chmod +x gradlew
 
 # Descargar dependencias (capa cacheada)
 COPY build.gradle settings.gradle ./
@@ -43,6 +44,8 @@ RUN ./gradlew dependencies --no-daemon 2>/dev/null || true
 # Copiar el código fuente y compilar
 COPY src/ ./src/
 COPY setup/ ./setup/
+# Convertir CRLF → LF en todos los archivos Java (checkout en Windows los deja con \r\n)
+RUN find src -name "*.java" -exec sed -i 's/\r//' {} +
 RUN ./gradlew build -x test --no-daemon
 # Resultado: /build/target/tracker-server.jar
 
@@ -57,6 +60,11 @@ COPY --from=backend-builder /build/target/tracker-server.jar ./tracker-server.ja
 COPY --from=backend-builder /build/target/lib/               ./lib/
 COPY --from=frontend-builder /frontend/build/                ./web/
 
+# Configuración mínima — la config real viene de variables de entorno
+# (CONFIG_USE_ENVIRONMENT_VARIABLES=true en docker-compose.yml)
+RUN mkdir -p conf
+COPY traccar.xml ./conf/traccar.xml
+
 # Directorios para logs y datos persistentes
 RUN mkdir -p logs data
 
@@ -65,6 +73,6 @@ EXPOSE 8082
 # Puertos de protocolos GPS (los dispositivos se conectan aquí)
 EXPOSE 5000-5150
 
-ENTRYPOINT ["java", "-jar", "tracker-server.jar"]
+ENTRYPOINT ["java", "-jar", "tracker-server.jar", "conf/traccar.xml"]
 # La configuración se inyecta por variables de entorno en docker-compose.yml
 # (CONFIG_USE_ENVIRONMENT_VARIABLES=true)
