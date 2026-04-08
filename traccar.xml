@@ -11,4 +11,10 @@
 
 <properties>
   <entry key='config.use_environment_variables'>true</entry>
+
+  <!-- Deshabilita el Liquibase interno de Traccar.
+       El schema es gestionado por traccar-db/migrations/ (nuestro Liquibase).
+       Sin esto, Traccar busca ./schema/changelog-master.xml en /opt/traccar
+       y falla porque esos archivos no se copian a la imagen runtime. -->
+  <entry key='database.changelog'></entry>
 </properties>
