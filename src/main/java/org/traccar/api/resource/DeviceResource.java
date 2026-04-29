@@ -137,6 +137,45 @@ public class DeviceResource extends BaseObjectResource<Device> {
         }
     }
 
+    @Path("{id}/speedlimit")
+    @PUT
+    public Response updateSpeedLimit(
+            @PathParam("id") long id,
+            @QueryParam("speed") double speedKmh) throws StorageException {
+
+        // Verificar acceso al dispositivo (lectura mínima)
+        permissionsService.checkPermission(Device.class, getUserId(), id);
+
+        // Si no es admin, verificar que el usuario tiene speedLimitEnabled = true
+        if (permissionsService.notAdmin(getUserId())) {
+            User user = storage.getObject(User.class, new Request(
+                    new Columns.All(),
+                    new Condition.Equals("id", getUserId())));
+            if (user == null || !Boolean.TRUE.equals(user.getAttributes().get("speedLimitEnabled"))) {
+                throw new SecurityException("Speed limit service not enabled for this user");
+            }
+        }
+
+        Device device = storage.getObject(Device.class, new Request(
+                new Columns.All(),
+                new Condition.And(
+                        new Condition.Equals("id", id),
+                        new Condition.Permission(User.class, getUserId(), Device.class))));
+
+        if (device == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+
+        // Convertir km/h → nudos (unidad interna de Traccar) y guardar solo ese atributo
+        device.getAttributes().put("speedLimit", speedKmh / 1.852);
+
+        storage.updateObject(device, new Request(
+                new Columns.Include("attributes"),
+                new Condition.Equals("id", id)));
+
+        return Response.ok(device).build();
+    }
+
     @Path("{id}/accumulators")
     @PUT
     public Response updateAccumulators(DeviceAccumulators entity) throws Exception {
