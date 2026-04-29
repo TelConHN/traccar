@@ -17,4 +17,9 @@
        Sin esto, Traccar busca ./schema/changelog-master.xml en /opt/traccar
        y falla porque esos archivos no se copian a la imagen runtime. -->
   <entry key='database.changelog'></entry>
+
+  <!-- Puerto único de auto-detección de protocolo GPS.
+       Todos los dispositivos conectan al 5055 y Traccar detecta el protocolo
+       automáticamente del primer paquete. Elimina la necesidad del rango 5000-5150. -->
+  <entry key='server.port'>5055</entry>
 </properties>
