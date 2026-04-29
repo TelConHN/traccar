@@ -18,8 +18,10 @@ package org.traccar.api.resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
+import org.traccar.database.CommandsManager;
 import org.traccar.database.MediaManager;
 import org.traccar.helper.LogAction;
+import org.traccar.model.Command;
 import org.traccar.model.Device;
 import org.traccar.model.DeviceAccumulators;
 import org.traccar.model.Position;
@@ -65,6 +67,9 @@ public class DeviceResource extends BaseObjectResource<Device> {
 
     @Inject
     private ConnectionManager connectionManager;
+
+    @Inject
+    private CommandsManager commandsManager;
 
     @Inject
     private MediaManager mediaManager;
@@ -172,6 +177,19 @@ public class DeviceResource extends BaseObjectResource<Device> {
         storage.updateObject(device, new Request(
                 new Columns.Include("attributes"),
                 new Condition.Equals("id", id)));
+
+        // Si el dispositivo soporta limitador hardware, enviar el comando GPS server-side.
+        // El template lo define el admin en el dispositivo; el cliente solo aporta el número.
+        String commandTemplate = (String) device.getAttributes().get("speedLimitCommand");
+        if (Boolean.TRUE.equals(device.getAttributes().get("speedLimitSupported"))
+                && commandTemplate != null && !commandTemplate.isEmpty()) {
+            String commandText = commandTemplate.replace("{speed}", String.valueOf((int) speedKmh));
+            Command command = new Command();
+            command.setDeviceId(id);
+            command.setType(Command.TYPE_CUSTOM);
+            command.getAttributes().put(Command.KEY_DATA, commandText);
+            commandsManager.sendCommand(command);
+        }
 
         return Response.ok(device).build();
     }
