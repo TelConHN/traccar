@@ -1,8 +1,40 @@
-#set($subject = "Vencimiento de la cuenta")
-#set($digest = "La cuenta ha expirado")
+#set($subject = "TelConHN ⚠️: Vencimiento de Cuenta")
+#set($digest = "⚠️ Su cuenta de usuario de TelConHN ha expirado.")
 <!DOCTYPE html>
 <html>
-<body>
-Su cuenta de usuario ha expirado.
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vencimiento de Cuenta TelConHN</title>
+</head>
+<body style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; background-color: #f4f4f4;">
+
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+
+    <div style="background-color: #f39c12; color: #ffffff; padding: 20px; text-align: center;">
+      <h1 style="margin: 0; font-size: 24px;">⚠️ Notificación de Expiración - TelConHN ⚠️</h1>
+    </div>
+
+    <div style="padding: 30px;">
+      <p style="font-size: 16px;">¡Hola!</p>
+      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> le informa que su <strong>cuenta de usuario ha expirado</strong>.</p>
+
+      <p style="font-size: 16px; margin-top: 20px;">
+        Por favor, póngase en contacto con el equipo de <strong>TelConHN</strong> para gestionar la renovación de su servicio y evitar la interrupción del acceso.
+      </p>
+
+      <p style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
+        <a href="$webUrl" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; display: inline-block;">
+          Acceder al Portal TelConHN
+        </a>
+      </p>
+    </div>
+
+    <div style="background-color: #f9f9f9; color: #777; padding: 20px; text-align: center; font-size: 12px; border-top: 1px solid #eee;">
+      <p style="margin: 0;">© ${dateTool.get('yyyy')} TelConHN. Todos los derechos reservados.</p>
+    </div>
+
+  </div>
+
 </body>
 </html>

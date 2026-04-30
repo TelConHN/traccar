@@ -1,13 +1,54 @@
-#set($subject = "$esc.html($device.name): ignición ENCENDIDA")
-#set($digest = "$device.name ignición ENCENDIDA a las $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)")
+#set($subject = "TelConHN 🔑▶️: Ignición ENCENDIDA - $device.name")
+#set($digest = "🔑▶️ $device.name: Ignición encendida")
 <!DOCTYPE html>
 <html>
-<body>
-Dispositivo: $esc.html($device.name)<br>
-Ignición ENCENDIDA<br>
-Hora: $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)<br>
-Punto: <a href="$webUrl/event/$event.id">#{if}($position.address)$position.address#{else}$position.latitude&deg;, $position.longitude&deg;#{end}</a><br>
-<br>
-<a href="$webUrl/settings/notifications?token=$token">Cancelar suscripción</a>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notificación de Ignición TelConHN</title>
+</head>
+<body style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; background-color: #f4f4f4;">
+
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+
+    <div style="background-color: #2ecc71; color: #ffffff; padding: 20px; text-align: center;">
+      <h1 style="margin: 0; font-size: 24px;">🔑 Ignición ENCENDIDA - TelConHN 🔑</h1>
+    </div>
+
+    <div style="padding: 30px;">
+      <p style="font-size: 16px;">¡Hola!</p>
+      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> informa que la <strong>ignición</strong> del siguiente dispositivo ha sido <strong>ENCENDIDA</strong>:</p>
+
+      <div style="background-color: #f8fef8; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
+        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $device.name</p>
+        <p style="margin: 0 0 10px 0;"><strong>⏰ Hora de Encendido:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)</p>
+        
+        <p style="margin: 0;"><strong>📍 Ubicación:</strong> 
+          <a href="$webUrl/event/$event.id" style="color: #3498db; text-decoration: none; font-weight: bold;">
+            #{if}($position.address)
+              $position.address
+            #{else}
+              $position.latitude&deg;, $position.longitude&deg;
+            #{end}
+          </a>
+        </p>
+      </div>
+
+      <p style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
+        <a href="$webUrl/event/$event.id" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; display: inline-block;">
+          Ver Detalles del Evento
+        </a>
+      </p>
+    </div>
+
+    <div style="background-color: #f9f9f9; color: #777; padding: 20px; text-align: center; font-size: 12px; border-top: 1px solid #eee;">
+      <p style="margin: 0;">© ${dateTool.get('yyyy')} TelConHN. Todos los derechos reservados.</p>
+      <p style="margin: 10px 0 0 0;">
+        <a href="$webUrl/settings/notifications?token=$token" style="color: #777; text-decoration: underline;">🚫 Cancelar suscripción</a>
+      </p>
+    </div>
+
+  </div>
+
 </body>
 </html>

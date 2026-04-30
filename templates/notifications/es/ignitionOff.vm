@@ -1,5 +1,5 @@
 #set($subject = "TelConHN 🔑🛑: Ignición APAGADA - $device.name")
-#set($digest = "🔑🛑 $device.name: Ignición APAGADA a las $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)")
+#set($digest = "🔑🛑 $device.name: Ignición apagada")
 <!DOCTYPE html>
 <html>
 <head>

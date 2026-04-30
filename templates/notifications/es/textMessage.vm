@@ -1,31 +1,29 @@
-#set($subject = "TelConHN ⛽⬆️: Carga de Combustible - $device.name")
-#set($digest = "⛽⬆️ $device.name: carga de combustible")
+#set($subject = "TelConHN 💬: Mensaje de Texto Recibido - $device.name")
+#set($digest = "💬 $device.name: mensaje recibido")
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carga de Combustible TelConHN</title>
+  <title>Mensaje de Texto Recibido - TelConHN</title>
 </head>
 <body style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; background-color: #f4f4f4;">
 
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
 
-    <div style="background-color: #2ecc71; color: #ffffff; padding: 20px; text-align: center;">
-      <h1 style="margin: 0; font-size: 24px;">⛽ Carga de Combustible - TelConHN ⛽</h1>
+    <div style="background-color: #3498db; color: #ffffff; padding: 20px; text-align: center;">
+      <h1 style="margin: 0; font-size: 24px;">💬 Mensaje de Texto Recibido - TelConHN 💬</h1>
     </div>
 
     <div style="padding: 30px;">
-      <p style="font-size: 16px;">¡Hola!</p>
-      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> ha registrado una <strong>carga de combustible</strong> en el siguiente dispositivo:</p>
+      <p style="font-size: 16px;">¡Hola $user.name!</p>
+      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> informa que se ha recibido un <strong>mensaje de texto (SMS)</strong> del siguiente dispositivo:</p>
 
-      <div style="background-color: #f8fef8; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
+      <div style="background-color: #f5faff; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
         <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $device.name</p>
         <p style="margin: 0 0 10px 0;"><strong>⏰ Hora:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)</p>
-        <p style="margin: 0 0 10px 0;"><strong>⛽ Nivel Anterior:</strong> $!event.attributes.before</p>
-        <p style="margin: 0 0 10px 0;"><strong>⛽ Nivel Actual:</strong> $!event.attributes.after</p>
         
-        <p style="margin: 0;"><strong>📍 Ubicación:</strong> 
+        <p style="margin: 0 0 10px 0;"><strong>📍 Ubicación:</strong> 
           <a href="$webUrl/event/$event.id" style="color: #3498db; text-decoration: none; font-weight: bold;">
             #{if}($position.address)
               $position.address
@@ -34,6 +32,11 @@
             #{end}
           </a>
         </p>
+        
+        <div style="background-color: #eef; padding: 10px; border-radius: 4px; font-style: italic; margin-top: 15px;">
+          <strong>💬 Mensaje Recibido:</strong><br>
+          $event.getString('message')
+        </div>
       </div>
 
       <p style="text-align: center; margin-top: 30px; margin-bottom: 20px;">

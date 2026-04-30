@@ -1,15 +1,57 @@
-#set($subject = "$esc.html($device.name): ¡alarma!")
+#set($subject = "TelConHN 🚨: Alarma de $device.name")
 #set($alarmKey = $event.getString('alarm'))
 #set($alarmName = $translations.get("alarm${alarmKey.substring(0, 1).toUpperCase()}${alarmKey.substring(1)}"))
-#set($digest = "Alarma de $device.name: $alarmName a las $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)")
+#set($digest = "🚨 $device.name: $alarmName")
 <!DOCTYPE html>
 <html>
-<body>
-Dispositivo: $esc.html($device.name)<br>
-Alarma: $esc.html($alarmName)<br>
-Hora: $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)<br>
-Punto: <a href="$webUrl/event/$event.id">#{if}($position.address)$position.address#{else}$position.latitude&deg;, $position.longitude&deg;#{end}</a><br>
-<br>
-<a href="$webUrl/settings/notifications?token=$token">Cancelar suscripción</a>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alarma TelConHN</title>
+</head>
+<body style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; background-color: #f4f4f4;">
+
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+
+    <div style="background-color: #e74c3c; color: #ffffff; padding: 20px; text-align: center;">
+      <h1 style="margin: 0; font-size: 24px;">🚨 Alerta de Alarma - TelConHN 🚨</h1>
+    </div>
+
+    <div style="padding: 30px;">
+      <p style="font-size: 16px;">¡Hola!</p>
+      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> ha detectado una nueva alarma para uno de tus dispositivos.</p>
+
+      <div style="background-color: #fdfafa; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
+        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $device.name</p>
+        <p style="margin: 0 0 10px 0;"><strong>🚨 Alarma:</strong> $alarmName</p>
+        <p style="margin: 0 0 10px 0;"><strong>⏰ Hora:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)</p>
+        
+        <p style="margin: 0;"><strong>📍 Ubicación:</strong> 
+          <a href="$webUrl/event/$event.id" style="color: #3498db; text-decoration: none; font-weight: bold;">
+            #{if}($position.address)
+              $position.address
+            #{else}
+              $position.latitude&deg;, $position.longitude&deg;
+            #{end}
+          </a>
+        </p>
+      </div>
+
+      <p style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
+        <a href="$webUrl/event/$event.id" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; display: inline-block;">
+          Ver Detalles del Evento
+        </a>
+      </p>
+    </div>
+
+    <div style="background-color: #f9f9f9; color: #777; padding: 20px; text-align: center; font-size: 12px; border-top: 1px solid #eee;">
+      <p style="margin: 0;">© ${dateTool.get('yyyy')} TelConHN. Todos los derechos reservados.</p>
+      <p style="margin: 10px 0 0 0;">
+        <a href="$webUrl/settings/notifications?token=$token" style="color: #777; text-decoration: underline;">🚫 Cancelar suscripción</a>
+      </p>
+    </div>
+
+  </div>
+
 </body>
 </html>

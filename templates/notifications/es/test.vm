@@ -1,27 +1,29 @@
-#set($subject = "TelConHN 🟢: Dispositivo Conectado - $device.name")
-#set($digest = "🟢 $device.name conectado")
+#set($subject = "TelConHN 🧪: Mensaje de Prueba")
+#set($digest = "✅ ¡Mensaje de prueba de TelConHN! La configuración es correcta.")
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notificación de Conexión TelConHN</title>
+  <title>Mensaje de Prueba - TelConHN</title>
 </head>
 <body style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; background-color: #f4f4f4;">
 
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
 
     <div style="background-color: #2ecc71; color: #ffffff; padding: 20px; text-align: center;">
-      <h1 style="margin: 0; font-size: 24px;">🟢 Dispositivo Conectado - TelConHN 🟢</h1>
+      <h1 style="margin: 0; font-size: 24px;">✅ Mensaje de Prueba - TelConHN ✅</h1>
     </div>
 
     <div style="padding: 30px;">
-      <p style="font-size: 16px;">¡Hola!</p>
-      <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> informa que el siguiente dispositivo ha vuelto a <strong>conectarse</strong> al servidor.</p>
+      <p style="font-size: 16px;">¡Hola $user.name!</p>
+      <p style="font-size: 16px;">Este es un mensaje de prueba de la plataforma de rastreo de <strong>TelConHN</strong>.</p>
+      <p style="font-size: 16px;">Si estás leyendo este mensaje, ¡significa que tus notificaciones por correo electrónico están configuradas y funcionando correctamente!</p>
 
       <div style="background-color: #f8fef8; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
-        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $device.name</p>
-        <p style="margin: 0;"><strong>⏰ Hora de Conexión:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)</p>
+        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo de Prueba:</strong> $device.name</p>
+        
+        <p style="margin: 0;"><strong>⏰ Hora de Prueba:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $dateTool.getDate(), $locale, $timezone)</p>
       </div>
 
       <p style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
@@ -33,6 +35,7 @@
 
     <div style="background-color: #f9f9f9; color: #777; padding: 20px; text-align: center; font-size: 12px; border-top: 1px solid #eee;">
       <p style="margin: 0;">© ${dateTool.get('yyyy')} TelConHN. Todos los derechos reservados.</p>
+      
       <p style="margin: 10px 0 0 0;">
         <a href="$webUrl/settings/notifications?token=$token" style="color: #777; text-decoration: underline;">🚫 Cancelar suscripción</a>
       </p>
