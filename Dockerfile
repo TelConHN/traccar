@@ -65,6 +65,9 @@ COPY --from=frontend-builder /frontend/build/                ./web/
 RUN mkdir -p conf
 COPY traccar.xml ./conf/traccar.xml
 
+# Templates de notificaciones (email y push) — Traccar los busca en ./templates/
+COPY templates/ ./templates/
+
 # Directorios para logs y datos persistentes
 RUN mkdir -p logs data
 
