@@ -1170,6 +1170,18 @@ public final class Keys {
             "mail.smtp.fromName",
             List.of(KeyType.CONFIG, KeyType.USER));
 
+    public static final ConfigKey<String> MAIL_SMTP_CONNECTIONTIMEOUT = new StringConfigKey(
+            "mail.smtp.connectiontimeout",
+            List.of(KeyType.CONFIG, KeyType.USER));
+
+    public static final ConfigKey<String> MAIL_SMTP_TIMEOUT = new StringConfigKey(
+            "mail.smtp.timeout",
+            List.of(KeyType.CONFIG, KeyType.USER));
+
+    public static final ConfigKey<String> MAIL_SMTP_WRITETIMEOUT = new StringConfigKey(
+            "mail.smtp.writetimeout",
+            List.of(KeyType.CONFIG, KeyType.USER));
+
     /**
      * SMS API service full URL. Enables SMS commands and notifications.
      */

@@ -104,6 +104,7 @@ import jakarta.annotation.Nullable;
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
+import org.glassfish.jersey.client.ClientProperties;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Properties;
@@ -153,7 +154,10 @@ public class MainModule extends AbstractModule {
     @Singleton
     @Provides
     public static Client provideClient(ObjectMapperContextResolver objectMapperContextResolver) {
-        return ClientBuilder.newClient().register(objectMapperContextResolver);
+        return ClientBuilder.newClient()
+                .register(objectMapperContextResolver)
+                .property(ClientProperties.CONNECT_TIMEOUT, 10000)
+                .property(ClientProperties.READ_TIMEOUT, 10000);
     }
 
     @Singleton
