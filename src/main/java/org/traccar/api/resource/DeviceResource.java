@@ -188,7 +188,11 @@ public class DeviceResource extends BaseObjectResource<Device> {
             command.setDeviceId(id);
             command.setType(Command.TYPE_CUSTOM);
             command.getAttributes().put(Command.KEY_DATA, commandText);
-            commandsManager.sendCommand(command);
+            try {
+                commandsManager.sendCommand(command);
+            } catch (Exception e) {
+                throw new StorageException(e);
+            }
         }
 
         return Response.ok(device).build();
