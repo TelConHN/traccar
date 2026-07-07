@@ -171,6 +171,77 @@ public class ReportUtils {
         transformer.write();
     }
 
+    /**
+     * Above this implied average speed, a start/end odometer jump (or a distance/elapsed-time
+     * pairing, e.g. distance over engine hours) is physically impossible for a road vehicle — a
+     * sign of a device counter glitch/reset/unit bug, not a real trip or a real average speed.
+     * Chosen as a generous upper bound (well above any real highway average) to avoid rejecting
+     * legitimate fast trips.
+     */
+    private static final double MAX_PLAUSIBLE_SPEED_KMH = 200;
+
+    private double impliedSpeedKmh(double distanceMeters, long elapsedMs) {
+        if (elapsedMs <= 0) {
+            return distanceMeters > 0 ? Double.POSITIVE_INFINITY : 0;
+        }
+        return (distanceMeters / 1000.0) / (elapsedMs / 3_600_000.0);
+    }
+
+    private boolean isPlausibleOdometer(Position start, Position end, double startValue, double endValue) {
+        double distanceMeters = endValue - startValue;
+        if (distanceMeters < 0) {
+            return false;
+        }
+        return impliedSpeedKmh(distanceMeters, end.getFixTime().getTime() - start.getFixTime().getTime())
+                <= MAX_PLAUSIBLE_SPEED_KMH;
+    }
+
+    /**
+     * Used for average-speed figures derived from a device-reported counter (e.g. engine hours)
+     * instead of GPS-based distance/time — those counters can reset or glitch just like odometer
+     * ones, producing an impossible average speed even when the distance itself is correct.
+     */
+    public boolean isPlausibleAverageSpeed(double distanceMeters, long elapsedMs) {
+        return impliedSpeedKmh(distanceMeters, elapsedMs) <= MAX_PLAUSIBLE_SPEED_KMH;
+    }
+
+    /**
+     * Priority is obdOdometer (read from the vehicle's OBD/CAN bus, matches the dashboard) over
+     * odometer (device-reported, but on most protocols this is GPS-calculated by the tracker
+     * firmware, not the real vehicle mileage) over totalDistance (Traccar's own GPS calculation).
+     * A tier is skipped if the jump it implies is physically impossible (see
+     * {@link #isPlausibleOdometer}), since that means the device value is glitched, not real.
+     * If even the GPS fallback is implausible, it's still used (nothing better exists) but
+     * flagged via odometerImplausible so callers can show it as suspicious instead of trusting it.
+     */
+    public void setOdometerRange(BaseReportItem item, Position start, Position end, boolean ignoreOdometer) {
+        double obdStart = start.getDouble(Position.KEY_OBD_ODOMETER);
+        double obdEnd = end.getDouble(Position.KEY_OBD_ODOMETER);
+        double deviceStart = start.getDouble(Position.KEY_ODOMETER);
+        double deviceEnd = end.getDouble(Position.KEY_ODOMETER);
+        double gpsStart = start.getDouble(Position.KEY_TOTAL_DISTANCE);
+        double gpsEnd = end.getDouble(Position.KEY_TOTAL_DISTANCE);
+
+        if (!ignoreOdometer && obdStart != 0 && obdEnd != 0
+                && isPlausibleOdometer(start, end, obdStart, obdEnd)) {
+            item.setStartOdometer(obdStart);
+            item.setEndOdometer(obdEnd);
+            item.setOdometerSource("obd");
+            item.setOdometerImplausible(false);
+        } else if (!ignoreOdometer && deviceStart != 0 && deviceEnd != 0
+                && isPlausibleOdometer(start, end, deviceStart, deviceEnd)) {
+            item.setStartOdometer(deviceStart);
+            item.setEndOdometer(deviceEnd);
+            item.setOdometerSource("device");
+            item.setOdometerImplausible(false);
+        } else {
+            item.setStartOdometer(gpsStart);
+            item.setEndOdometer(gpsEnd);
+            item.setOdometerSource("gps");
+            item.setOdometerImplausible(!isPlausibleOdometer(start, end, gpsStart, gpsEnd));
+        }
+    }
+
     private TripReportItem calculateTrip(
             Device device, Position startTrip, Position endTrip, double maxSpeed,
             boolean ignoreOdometer) throws StorageException {
@@ -202,7 +273,8 @@ public class ReportUtils {
         }
         trip.setEndAddress(endAddress);
 
-        trip.setDistance(PositionUtil.calculateDistance(startTrip, endTrip, !ignoreOdometer));
+        setOdometerRange(trip, startTrip, endTrip, ignoreOdometer);
+        trip.setDistance(trip.isOdometerImplausible() ? 0 : trip.getEndOdometer() - trip.getStartOdometer());
         trip.setDuration(tripDuration);
         if (tripDuration > 0) {
             trip.setAverageSpeed(UnitsConverter.knotsFromMps(trip.getDistance() * 1000 / tripDuration));
@@ -212,16 +284,6 @@ public class ReportUtils {
 
         trip.setDriverUniqueId(findDriver(startTrip, endTrip));
         trip.setDriverName(findDriverName(trip.getDriverUniqueId()));
-
-        if (!ignoreOdometer
-                && startTrip.getDouble(Position.KEY_ODOMETER) != 0
-                && endTrip.getDouble(Position.KEY_ODOMETER) != 0) {
-            trip.setStartOdometer(startTrip.getDouble(Position.KEY_ODOMETER));
-            trip.setEndOdometer(endTrip.getDouble(Position.KEY_ODOMETER));
-        } else {
-            trip.setStartOdometer(startTrip.getDouble(Position.KEY_TOTAL_DISTANCE));
-            trip.setEndOdometer(endTrip.getDouble(Position.KEY_TOTAL_DISTANCE));
-        }
 
         return trip;
     }
@@ -255,15 +317,7 @@ public class ReportUtils {
             stop.setEngineHours(endStop.getLong(Position.KEY_HOURS) - startStop.getLong(Position.KEY_HOURS));
         }
 
-        if (!ignoreOdometer
-                && startStop.getDouble(Position.KEY_ODOMETER) != 0
-                && endStop.getDouble(Position.KEY_ODOMETER) != 0) {
-            stop.setStartOdometer(startStop.getDouble(Position.KEY_ODOMETER));
-            stop.setEndOdometer(endStop.getDouble(Position.KEY_ODOMETER));
-        } else {
-            stop.setStartOdometer(startStop.getDouble(Position.KEY_TOTAL_DISTANCE));
-            stop.setEndOdometer(endStop.getDouble(Position.KEY_TOTAL_DISTANCE));
-        }
+        setOdometerRange(stop, startStop, endStop, ignoreOdometer);
 
         return stop;
 

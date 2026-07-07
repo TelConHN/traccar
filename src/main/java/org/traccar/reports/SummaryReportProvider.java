@@ -93,25 +93,25 @@ public class SummaryReportProvider {
             TripsConfig tripsConfig = new TripsConfig(
                     new AttributeUtil.StorageProvider(config, storage, permissionsService, device));
             boolean ignoreOdometer = tripsConfig.getIgnoreOdometer();
-            result.setDistance(PositionUtil.calculateDistance(first, last, !ignoreOdometer));
+            reportUtils.setOdometerRange(result, first, last, ignoreOdometer);
+            result.setDistance(
+                    result.isOdometerImplausible() ? 0 : result.getEndOdometer() - result.getStartOdometer());
             result.setSpentFuel(reportUtils.calculateFuel(first, last, device));
 
             if (first.hasAttribute(Position.KEY_HOURS) && last.hasAttribute(Position.KEY_HOURS)) {
                 result.setStartHours(first.getLong(Position.KEY_HOURS));
                 result.setEndHours(last.getLong(Position.KEY_HOURS));
                 long engineHours = result.getEngineHours();
-                if (engineHours > 0) {
+                // Engine hours is a device counter — it can reset/glitch just like the odometer,
+                // producing an impossible average speed even when the distance itself is fine.
+                if (engineHours > 0 && reportUtils.isPlausibleAverageSpeed(result.getDistance(), engineHours)) {
                     result.setAverageSpeed(UnitsConverter.knotsFromMps(result.getDistance() * 1000 / engineHours));
+                } else {
+                    long elapsedMs = last.getFixTime().getTime() - first.getFixTime().getTime();
+                    if (elapsedMs > 0 && reportUtils.isPlausibleAverageSpeed(result.getDistance(), elapsedMs)) {
+                        result.setAverageSpeed(UnitsConverter.knotsFromMps(result.getDistance() * 1000 / elapsedMs));
+                    }
                 }
-            }
-
-            if (!ignoreOdometer
-                    && first.getDouble(Position.KEY_ODOMETER) != 0 && last.getDouble(Position.KEY_ODOMETER) != 0) {
-                result.setStartOdometer(first.getDouble(Position.KEY_ODOMETER));
-                result.setEndOdometer(last.getDouble(Position.KEY_ODOMETER));
-            } else {
-                result.setStartOdometer(first.getDouble(Position.KEY_TOTAL_DISTANCE));
-                result.setEndOdometer(last.getDouble(Position.KEY_TOTAL_DISTANCE));
             }
 
             result.setStartTime(first.getFixTime());

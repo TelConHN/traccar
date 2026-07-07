@@ -103,6 +103,35 @@ public class BaseReportItem {
         this.endOdometer = endOdometer;
     }
 
+    /**
+     * Where startOdometer/endOdometer came from: "obd" (read from the vehicle's OBD/CAN bus,
+     * matches the dashboard), "device" (reported by the tracker but not confirmed to come from
+     * the vehicle bus), or "gps" (distance calculated from GPS positions, never the real mileage).
+     */
+    private String odometerSource;
+
+    public String getOdometerSource() {
+        return odometerSource;
+    }
+
+    public void setOdometerSource(String odometerSource) {
+        this.odometerSource = odometerSource;
+    }
+
+    /**
+     * True when startOdometer/endOdometer imply a physically impossible average speed (a device
+     * counter glitch/reset), meaning this range should be shown as suspicious, not trusted as-is.
+     */
+    private boolean odometerImplausible;
+
+    public boolean isOdometerImplausible() {
+        return odometerImplausible;
+    }
+
+    public void setOdometerImplausible(boolean odometerImplausible) {
+        this.odometerImplausible = odometerImplausible;
+    }
+
     private Date startTime;
 
     public Date getStartTime() {
