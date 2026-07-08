@@ -18,22 +18,23 @@ package org.traccar.api;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
-
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ResourceErrorHandler implements ExceptionMapper<Exception> {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ResourceErrorHandler.class);
+
     @Override
     public Response toResponse(Exception exception) {
-        StringWriter stringWriter = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(stringWriter);
-        exception.printStackTrace(printWriter);
+        LOGGER.warn("API request failed", exception);
 
         if (exception instanceof WebApplicationException webException) {
-            return Response.fromResponse(webException.getResponse()).entity(stringWriter.toString()).build();
+            return Response.fromResponse(webException.getResponse())
+                    .entity(exception.getMessage())
+                    .build();
         } else {
-            return Response.status(Response.Status.BAD_REQUEST).entity(stringWriter.toString()).build();
+            return Response.status(Response.Status.BAD_REQUEST).entity(exception.getMessage()).build();
         }
     }
 
