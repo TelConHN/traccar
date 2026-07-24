@@ -1,0 +1,26 @@
+# Mismo problema que en admin/api: "COPY traccar-web/ ./" (Dockerfile) copiaría
+# el node_modules del host encima del `npm ci` recién hecho para linux/alpine.
+traccar-web/node_modules
+traccar-web/build
+traccar-web/coverage
+
+# Build de Java/Gradle — se regenera dentro del contenedor
+target
+build
+out
+.gradle
+
+.idea
+*.iml
+.vscode
+.classpath
+.project
+.settings
+
+.git
+.gitignore
+
+.env
+.env.local
+*.log
+.DS_Store
