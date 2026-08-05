@@ -148,6 +148,14 @@ public class DeviceResource extends BaseObjectResource<Device> {
             @PathParam("id") long id,
             @QueryParam("speed") double speedKmh) throws StorageException {
 
+        // Sin límites, un valor negativo/cero/NaN/absurdamente alto (ej. Double.MAX_VALUE)
+        // se guardaría tal cual en el atributo del dispositivo y se inyectaría sin más
+        // chequeo en el comando de hardware más abajo (commandTemplate.replace("{speed}", ...)).
+        // 300 km/h cubre cualquier vehículo real rastreado por este sistema.
+        if (!Double.isFinite(speedKmh) || speedKmh <= 0 || speedKmh > 300) {
+            throw new IllegalArgumentException("speed must be between 0 and 300 km/h");
+        }
+
         // Verificar acceso al dispositivo (lectura mínima)
         permissionsService.checkPermission(Device.class, getUserId(), id);
 
