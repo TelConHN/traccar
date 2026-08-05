@@ -71,6 +71,15 @@ COPY templates/ ./templates/
 # Directorios para logs y datos persistentes
 RUN mkdir -p logs data
 
+# Correr como root da a cualquier vulnerabilidad de deserialización/RCE en el
+# servidor (que además recibe tráfico crudo de miles de protocolos GPS, la
+# superficie de ataque más expuesta de todo el stack) control total del
+# contenedor. Ningún puerto usado aquí es privilegiado (8082, 5000-5150), así
+# que no hace falta root ni para arrancar ni para escuchar.
+RUN groupadd -r traccar && useradd -r -g traccar traccar \
+    && chown -R traccar:traccar /opt/traccar
+USER traccar
+
 # Puerto de la API y la interfaz web
 EXPOSE 8082
 # Puertos de protocolos GPS (los dispositivos se conectan aquí)
