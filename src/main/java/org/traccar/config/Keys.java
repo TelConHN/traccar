@@ -1424,6 +1424,20 @@ public final class Keys {
             List.of(KeyType.CONFIG));
 
     /**
+     * Maximum number of positions returned by the interactive replay endpoint (GET /api/positions
+     * with from/to) for a single device. Above this count, positions are downsampled at an even
+     * stride (always keeping the first and last point) instead of rejecting the request — a client
+     * with a long retention period is still entitled to their full history, but a browser map/slider
+     * cannot usefully render or scrub through an unbounded number of points. Raw, un-sampled data
+     * remains available in full through the KML/GPX/CSV export endpoints, which are unaffected by
+     * this setting.
+     */
+    public static final ConfigKey<Integer> POSITIONS_REPLAY_MAX_POINTS = new IntegerConfigKey(
+            "positions.replayMaxPoints",
+            List.of(KeyType.CONFIG),
+            20_000);
+
+    /**
      * Time threshold for fast reports. Fast reports are more efficient, but less accurate and missing some information.
      * The value is in seconds. One day by default.
      */

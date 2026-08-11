@@ -16,6 +16,8 @@
 package org.traccar.api.resource;
 
 import org.traccar.api.BaseResource;
+import org.traccar.config.Config;
+import org.traccar.config.Keys;
 import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
@@ -55,6 +57,9 @@ import java.util.stream.Stream;
 public class PositionResource extends BaseResource {
 
     @Inject
+    private Config config;
+
+    @Inject
     private KmlExportProvider kmlExportProvider;
 
     @Inject
@@ -85,8 +90,13 @@ public class PositionResource extends BaseResource {
                 Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
                         new Columns.All(), new Condition.Equals("id", geofenceId)));
 
-                return PositionUtil.getPositionsStream(storage, deviceId, from, to)
-                        .filter(position -> geofence == null || geofence.containsPosition(position));
+                List<Position> positions;
+                try (var stream = PositionUtil.getPositionsStream(storage, deviceId, from, to)) {
+                    positions = stream
+                            .filter(position -> geofence == null || geofence.containsPosition(position))
+                            .toList();
+                }
+                return downsample(positions, config.getInteger(Keys.POSITIONS_REPLAY_MAX_POINTS)).stream();
             } else {
                 return storage.getObjectsStream(Position.class, new Request(
                         new Columns.All(), new Condition.LatestPositions(deviceId)));
@@ -94,6 +104,23 @@ public class PositionResource extends BaseResource {
         } else {
             return PositionUtil.getLatestPositions(storage, getUserId()).stream();
         }
+    }
+
+    // Even-stride sample instead of rejecting long ranges outright — a device with an extended
+    // retention period is still entitled to its full history, but a map/slider can't usefully
+    // render or scrub through an unbounded number of points. Full-resolution data remains
+    // available through the KML/GPX/CSV export endpoints, which don't call this method.
+    private static List<Position> downsample(List<Position> positions, int maxPoints) {
+        if (maxPoints <= 0 || positions.size() <= maxPoints) {
+            return positions;
+        }
+        List<Position> result = new ArrayList<>(maxPoints);
+        double stride = (double) positions.size() / maxPoints;
+        for (int i = 0; i < maxPoints; i++) {
+            result.add(positions.get((int) (i * stride)));
+        }
+        result.set(result.size() - 1, positions.get(positions.size() - 1));
+        return result;
     }
 
     @Path("{id}")
