@@ -68,8 +68,14 @@ COPY traccar.xml ./conf/traccar.xml
 # Templates de notificaciones (email y push) — Traccar los busca en ./templates/
 COPY templates/ ./templates/
 
-# Directorios para logs y datos persistentes
-RUN mkdir -p logs data
+# Directorios para logs y datos persistentes.
+# `media` guarda las imágenes de dispositivo (foto del vehículo) y los archivos
+# que suben los protocolos GPS. Se crea acá A PROPÓSITO, antes del chown de
+# abajo: docker-compose monta un volumen nombrado en /opt/traccar/media y Docker
+# copia dueño y permisos del directorio de la imagen al inicializarlo. Si el
+# directorio no existiera, el volumen nacería root:root y el proceso (que corre
+# como `traccar`) no podría escribir las fotos.
+RUN mkdir -p logs data media
 
 # Correr como root da a cualquier vulnerabilidad de deserialización/RCE en el
 # servidor (que además recibe tráfico crudo de miles de protocolos GPS, la
