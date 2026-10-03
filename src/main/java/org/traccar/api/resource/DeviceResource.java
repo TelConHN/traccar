@@ -50,8 +50,12 @@ import jakarta.ws.rs.core.Response;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @Path("devices")
@@ -140,6 +144,32 @@ public class DeviceResource extends BaseObjectResource<Device> {
                     columns, Condition.merge(conditions), new Order("name", false, limit, offset)));
 
         }
+    }
+
+    // Usuarios (clientes) de cada carro, para que la lista se pueda filtrar o buscar por el
+    // cliente dueño. Se omiten los administradores: tienen todos los carros.
+    @Path("owners")
+    @GET
+    public Map<Long, List<Map<String, Object>>> getOwners() throws StorageException {
+        permissionsService.checkAdmin(getUserId());
+        Map<Long, User> users = new HashMap<>();
+        for (User user : storage.getObjects(User.class, new Request(new Columns.All()))) {
+            if (!user.getAdministrator()) {
+                users.put(user.getId(), user);
+            }
+        }
+        Map<Long, List<Map<String, Object>>> result = new HashMap<>();
+        for (var permission : storage.getPermissions(User.class, Device.class)) {
+            User user = users.get(permission.getOwnerId());
+            if (user != null) {
+                Map<String, Object> owner = new LinkedHashMap<>();
+                owner.put("id", user.getId());
+                owner.put("name", user.getName());
+                owner.put("email", user.getEmail());
+                result.computeIfAbsent(permission.getPropertyId(), k -> new ArrayList<>()).add(owner);
+            }
+        }
+        return result;
     }
 
     @Path("{id}/speedlimit")

@@ -20,10 +20,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseResource;
 import org.traccar.helper.LogAction;
+import org.traccar.model.Device;
+import org.traccar.model.Geofence;
 import org.traccar.model.Permission;
+import org.traccar.model.User;
 import org.traccar.model.UserRestrictions;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.StorageException;
+import org.traccar.storage.query.Columns;
+import org.traccar.storage.query.Condition;
+import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -34,6 +40,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,8 +94,31 @@ public class PermissionsResource  extends BaseResource {
             actionLogger.link(request, getUserId(),
                     permission.getOwnerClass(), permission.getOwnerId(),
                     permission.getPropertyClass(), permission.getPropertyId());
+            if (permission.getOwnerClass() == User.class && permission.getPropertyClass() == Device.class) {
+                autoAssignGeofences(permission.getOwnerId(), permission.getPropertyId());
+            }
         }
         return Response.noContent().build();
+    }
+
+    // Carro nuevo de un usuario: recibe las geocercas de ese usuario que el administrador marcó
+    // como "agregar sola a los carros nuevos" (Geofence.KEY_AUTO_USERS). Sin esa marca no se toca nada.
+    private void autoAssignGeofences(long userId, long deviceId) throws Exception {
+        String userKey = String.valueOf(userId);
+        for (Permission link : storage.getPermissions(User.class, userId, Geofence.class, 0)) {
+            Geofence geofence = storage.getObject(Geofence.class, new Request(
+                    new Columns.All(), new Condition.Equals("id", link.getPropertyId())));
+            String autoUsers = geofence != null ? geofence.getString(Geofence.KEY_AUTO_USERS) : null;
+            if (autoUsers == null || !Arrays.asList(autoUsers.split(",")).contains(userKey)) {
+                continue;
+            }
+            if (!storage.getPermissions(Device.class, deviceId, Geofence.class, geofence.getId()).isEmpty()) {
+                continue;
+            }
+            storage.addPermission(new Permission(Device.class, deviceId, Geofence.class, geofence.getId()));
+            cacheManager.invalidatePermission(true, Device.class, deviceId, Geofence.class, geofence.getId(), true);
+            actionLogger.link(request, getUserId(), Device.class, deviceId, Geofence.class, geofence.getId());
+        }
     }
 
     @POST

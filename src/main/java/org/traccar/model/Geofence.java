@@ -28,6 +28,14 @@ import java.text.ParseException;
 @StorageName("tc_geofences")
 public class Geofence extends ExtendedModel implements Schedulable {
 
+    // false = los avisos de esta geocerca no llegan a usuarios administradores (solo al cliente).
+    // Sin el atributo (geocercas anteriores a esta regla) se avisa a todos, como siempre.
+    public static final String KEY_NOTIFY_ADMINISTRATORS = "notificarAdministracion";
+    // Id del usuario que la creó; lo pone el servidor, no el cliente.
+    public static final String KEY_CREATED_BY = "creadoPor";
+    // Ids de usuario (separados por coma): cada carro nuevo de esos usuarios recibe esta geocerca.
+    public static final String KEY_AUTO_USERS = "autoAgregarUsuarios";
+
     private long calendarId;
 
     @Override

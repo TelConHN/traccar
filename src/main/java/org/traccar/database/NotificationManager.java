@@ -136,10 +136,14 @@ public class NotificationManager {
                 position.setAddress(geocoder.getAddress(position.getLatitude(), position.getLongitude(), null));
             }
 
+            boolean skipAdministrators = geofenceSkipsAdministrators(event);
             notifications.forEach(notification -> {
                 cacheManager.getNotificationUsers(notification.getId(), event.getDeviceId()).forEach(user -> {
                     if (blockedUsers.contains(user.getId())) {
                         LOGGER.info("User {} notification blocked", user.getId());
+                        return;
+                    }
+                    if (skipAdministrators && user.getAdministrator()) {
                         return;
                     }
                     for (String notificator : notification.getNotificatorsTypes()) {
@@ -152,6 +156,20 @@ public class NotificationManager {
                 });
             });
         }
+    }
+
+    // Solo entrada/salida: un exceso de velocidad también puede traer geofenceId (límite de la
+    // geocerca) y ese aviso a administración no se toca.
+    private boolean geofenceSkipsAdministrators(Event event) {
+        if (event.getGeofenceId() == 0
+                || !(event.getType().equals(Event.TYPE_GEOFENCE_ENTER)
+                        || event.getType().equals(Event.TYPE_GEOFENCE_EXIT))) {
+            return false;
+        }
+        Geofence geofence = cacheManager.getObject(Geofence.class, event.getGeofenceId());
+        return geofence != null
+                && geofence.hasAttribute(Geofence.KEY_NOTIFY_ADMINISTRATORS)
+                && !geofence.getBoolean(Geofence.KEY_NOTIFY_ADMINISTRATORS);
     }
 
     private void forwardEvent(Event event, Position position) {
