@@ -148,10 +148,21 @@ public class DeviceResource extends BaseObjectResource<Device> {
 
     // Usuarios (clientes) de cada carro, para que la lista se pueda filtrar o buscar por el
     // cliente dueño. Se omiten los administradores: tienen todos los carros.
+    // Solo para un administrador que ve (prácticamente) todos los carros: el principal u otro igual.
+    // Las cuentas administradoras del personal que ven una parte reciben la lista vacía y no tienen
+    // el filtro. Es 90% y no 100% porque hay carros vinculados solo a la cuenta de su cliente (p. ej.
+    // los que el cliente agregó él mismo) y uno solo de ésos le quitaba el filtro al principal.
+    // Es orden, no seguridad: un administrador igual puede consultar los usuarios por la API.
     @Path("owners")
     @GET
     public Map<Long, List<Map<String, Object>>> getOwners() throws StorageException {
         permissionsService.checkAdmin(getUserId());
+        int total = storage.getObjects(Device.class, new Request(new Columns.Include("id"))).size();
+        int visible = storage.getObjects(Device.class, new Request(
+                new Columns.Include("id"), new Condition.Permission(User.class, getUserId(), Device.class))).size();
+        if (visible * 10 < total * 9) {
+            return Map.of();
+        }
         Map<Long, User> users = new HashMap<>();
         for (User user : storage.getObjects(User.class, new Request(new Columns.All()))) {
             if (!user.getAdministrator()) {
