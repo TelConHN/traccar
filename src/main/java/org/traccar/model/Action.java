@@ -93,4 +93,72 @@ public class Action extends ExtendedModel {
     public void setUserEmail(String userEmail) {
         this.userEmail = userEmail;
     }
+
+    // Lo que sigue lo arma el reporte de auditoría al consultar; no se guarda en tc_actions.
+
+    private String userName;
+
+    @QueryIgnore
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    private String objectName;
+
+    @QueryIgnore
+    public String getObjectName() {
+        return objectName;
+    }
+
+    public void setObjectName(String objectName) {
+        this.objectName = objectName;
+    }
+
+    private String ownerName;
+
+    @QueryIgnore
+    public String getOwnerName() {
+        return ownerName;
+    }
+
+    public void setOwnerName(String ownerName) {
+        this.ownerName = ownerName;
+    }
+
+    private String commandResult;
+
+    @QueryIgnore
+    public String getCommandResult() {
+        return commandResult;
+    }
+
+    public void setCommandResult(String commandResult) {
+        this.commandResult = commandResult;
+    }
+
+    private Date commandResultTime;
+
+    @QueryIgnore
+    public Date getCommandResultTime() {
+        return commandResultTime;
+    }
+
+    public void setCommandResultTime(Date commandResultTime) {
+        this.commandResultTime = commandResultTime;
+    }
+
+    private Date queuedSentTime;
+
+    @QueryIgnore
+    public Date getQueuedSentTime() {
+        return queuedSentTime;
+    }
+
+    public void setQueuedSentTime(Date queuedSentTime) {
+        this.queuedSentTime = queuedSentTime;
+    }
 }

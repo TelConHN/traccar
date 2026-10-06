@@ -138,7 +138,7 @@ public class CommandResource extends ExtendedObjectResource<Command> {
             for (Device device : devices) {
                 Command command = QueuedCommand.fromCommand(entity).toCommand();
                 command.setDeviceId(device.getId());
-                QueuedCommand queuedCommand = commandsManager.sendCommand(command);
+                QueuedCommand queuedCommand = sendAndLog(command, groupId, entity.getDescription());
                 if (queuedCommand != null) {
                     queuedCommands.add(queuedCommand);
                 }
@@ -148,14 +148,35 @@ public class CommandResource extends ExtendedObjectResource<Command> {
             }
         } else {
             permissionsService.checkPermission(Device.class, getUserId(), entity.getDeviceId());
-            QueuedCommand queuedCommand = commandsManager.sendCommand(entity);
+            QueuedCommand queuedCommand = sendAndLog(entity, 0, entity.getDescription());
             if (queuedCommand != null) {
                 return Response.accepted(queuedCommand).build();
             }
         }
 
-        actionLogger.command(request, getUserId(), groupId, entity.getDeviceId(), entity.getType());
         return Response.ok(entity).build();
+    }
+
+    // Antes solo quedaba en auditoría el comando que salía en el momento, y sin decir cuál era: el que
+    // quedaba en cola (equipo desconectado) o fallaba no dejaba rastro.
+    private QueuedCommand sendAndLog(Command command, long groupId, String description) throws Exception {
+        QueuedCommand queuedCommand;
+        try {
+            queuedCommand = commandsManager.sendCommand(command);
+        } catch (Exception e) {
+            actionLogger.command(
+                    request, getUserId(), groupId, command, description, LogAction.COMMAND_FAILED, 0, e.getMessage());
+            throw e;
+        }
+        if (queuedCommand != null) {
+            actionLogger.command(
+                    request, getUserId(), groupId, command, description,
+                    LogAction.COMMAND_QUEUED, queuedCommand.getId(), null);
+        } else {
+            actionLogger.command(
+                    request, getUserId(), groupId, command, description, LogAction.COMMAND_SENT, 0, null);
+        }
+        return queuedCommand;
     }
 
     @GET

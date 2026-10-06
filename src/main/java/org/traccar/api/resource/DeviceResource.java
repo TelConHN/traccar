@@ -237,9 +237,16 @@ public class DeviceResource extends BaseObjectResource<Device> {
             command.setDeviceId(id);
             command.setType(Command.TYPE_CUSTOM);
             command.getAttributes().put(Command.KEY_DATA, commandText);
+            String description = "Límite de velocidad " + (int) speedKmh + " km/h";
             try {
-                commandsManager.sendCommand(command);
+                var queuedCommand = commandsManager.sendCommand(command);
+                actionLogger.command(
+                        request, getUserId(), 0, command, description,
+                        queuedCommand != null ? LogAction.COMMAND_QUEUED : LogAction.COMMAND_SENT,
+                        queuedCommand != null ? queuedCommand.getId() : 0, null);
             } catch (Exception e) {
+                actionLogger.command(
+                        request, getUserId(), 0, command, description, LogAction.COMMAND_FAILED, 0, e.getMessage());
                 throw new StorageException(e);
             }
         }

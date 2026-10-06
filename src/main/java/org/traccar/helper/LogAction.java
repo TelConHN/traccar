@@ -29,8 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.model.Action;
 import org.traccar.model.BaseModel;
+import org.traccar.model.Command;
 import org.traccar.model.Device;
-import org.traccar.model.Group;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -123,17 +123,44 @@ public final class LogAction {
         storeAction(action);
     }
 
-    public void command(HttpServletRequest request, long userId, long groupId, long deviceId, String type) {
+    public static final String COMMAND_SENT = "sent";
+    public static final String COMMAND_QUEUED = "queued";
+    public static final String COMMAND_FAILED = "failed";
+
+    // Un registro por carro, también cuando el comando se mandó a un grupo (queda groupId), para que el
+    // reporte de auditoría pueda decir a qué carro fue, filtrar por carro y buscar la respuesta del equipo.
+    // Se guarda qué comando fue (tipo, nombre si era uno guardado y sus parámetros, como el texto de un
+    // personalizado) y si salió, quedó en cola porque el equipo no estaba conectado, o falló.
+    public void command(
+            HttpServletRequest request, long userId, long groupId, Command command, String description,
+            String status, long queuedCommandId, String error) {
         Action action = new Action();
         action.setAddress(WebHelper.retrieveRemoteAddress(request));
         action.setUserId(userId);
         action.setActionType(ACTION_COMMAND);
+        action.setObjectType(Introspector.decapitalize(Device.class.getSimpleName()));
+        action.setObjectId(command.getDeviceId());
         if (groupId > 0) {
-            action.setObjectType(Introspector.decapitalize(Group.class.getSimpleName()));
-            action.setObjectId(groupId);
-        } else {
-            action.setObjectType(Introspector.decapitalize(Device.class.getSimpleName()));
-            action.setObjectId(deviceId);
+            action.set("groupId", groupId);
+        }
+        action.set("commandType", command.getType());
+        if (StringUtils.isNotBlank(description)) {
+            action.set("commandDescription", description);
+        }
+        if (command.getTextChannel()) {
+            action.set("sms", true);
+        }
+        command.getAttributes().forEach((key, value) -> {
+            if (!Command.KEY_NO_QUEUE.equals(key) && value != null) {
+                action.set("command." + key, StringUtils.abbreviate(value.toString(), 500));
+            }
+        });
+        action.set("status", status);
+        if (queuedCommandId > 0) {
+            action.set("queuedCommandId", queuedCommandId);
+        }
+        if (error != null) {
+            action.set("error", StringUtils.abbreviate(error, 300));
         }
         storeAction(action);
     }
