@@ -16,6 +16,7 @@
 package org.traccar.notificators;
 
 import org.traccar.database.CommandsManager;
+import org.traccar.helper.LogAction;
 import org.traccar.model.Command;
 import org.traccar.model.Event;
 import org.traccar.model.Notification;
@@ -35,12 +36,14 @@ public class NotificatorCommand extends Notificator {
 
     private final Storage storage;
     private final CommandsManager commandsManager;
+    private final LogAction actionLogger;
 
     @Inject
-    public NotificatorCommand(Storage storage, CommandsManager commandsManager) {
+    public NotificatorCommand(Storage storage, CommandsManager commandsManager, LogAction actionLogger) {
         super(null);
         this.storage = storage;
         this.commandsManager = commandsManager;
+        this.actionLogger = actionLogger;
     }
 
     @Override
@@ -50,12 +53,27 @@ public class NotificatorCommand extends Notificator {
             throw new MessageException("Saved command not provided");
         }
 
+        Command command;
         try {
-            Command command = storage.getObject(Command.class, new Request(
+            command = storage.getObject(Command.class, new Request(
                     new Columns.All(), new Condition.Equals("id", notification.getCommandId())));
-            command.setDeviceId(event.getDeviceId());
-            commandsManager.sendCommand(command);
         } catch (Exception e) {
+            throw new MessageException(e);
+        }
+        if (command == null) {
+            throw new MessageException("Saved command not found");
+        }
+        command.setDeviceId(event.getDeviceId());
+        // Nadie lo manda a mano, así que antes no quedaba en auditoría.
+        try {
+            var queuedCommand = commandsManager.sendCommand(command);
+            actionLogger.automaticCommand(
+                    user.getId(), notification, event, command,
+                    queuedCommand != null ? LogAction.COMMAND_QUEUED : LogAction.COMMAND_SENT,
+                    queuedCommand != null ? queuedCommand.getId() : 0, null);
+        } catch (Exception e) {
+            actionLogger.automaticCommand(
+                    user.getId(), notification, event, command, LogAction.COMMAND_FAILED, 0, e.getMessage());
             throw new MessageException(e);
         }
     }

@@ -23,6 +23,7 @@ import org.traccar.api.BaseResource;
 import org.traccar.api.signature.TokenManager;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
+import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Device;
 import org.traccar.model.Group;
@@ -34,11 +35,13 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 
 @Path("share")
@@ -51,6 +54,12 @@ public class ShareResource extends BaseResource {
 
     @Inject
     private TokenManager tokenManager;
+
+    @Inject
+    private LogAction actionLogger;
+
+    @Context
+    private HttpServletRequest request;
 
     private String share(User user, Class<? extends BaseModel> clazz, long id, Date expiration)
             throws StorageException, GeneralSecurityException, IOException {
@@ -105,7 +114,9 @@ public class ShareResource extends BaseResource {
     public String shareDevice(
             @FormParam("deviceId") long deviceId,
             @FormParam("expiration") Date expiration) throws StorageException, GeneralSecurityException, IOException {
-        return share(permissionsService.getUser(getUserId()), Device.class, deviceId, expiration);
+        String token = share(permissionsService.getUser(getUserId()), Device.class, deviceId, expiration);
+        actionLogger.share(request, getUserId(), Device.class, deviceId, expiration);
+        return token;
     }
 
     @Path("group")
@@ -114,7 +125,9 @@ public class ShareResource extends BaseResource {
     public String shareGroup(
             @FormParam("groupId") long groupId,
             @FormParam("expiration") Date expiration) throws StorageException, GeneralSecurityException, IOException {
-        return share(permissionsService.getUser(getUserId()), Group.class, groupId, expiration);
+        String token = share(permissionsService.getUser(getUserId()), Group.class, groupId, expiration);
+        actionLogger.share(request, getUserId(), Group.class, groupId, expiration);
+        return token;
     }
 
 }

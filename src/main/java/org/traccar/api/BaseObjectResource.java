@@ -96,10 +96,13 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
     public Response update(T entity) throws Exception {
         permissionsService.checkPermission(baseClass, getUserId(), entity.getId());
 
+        // Cómo estaba antes, para que la auditoría guarde qué cambió.
+        T stored = storage.getObject(baseClass, new Request(
+                new Columns.All(), new Condition.Equals("id", entity.getId())));
+
         boolean skipReadonly = false;
         if (entity instanceof User after) {
-            User before = storage.getObject(User.class, new Request(
-                    new Columns.All(), new Condition.Equals("id", entity.getId())));
+            User before = (User) stored;
             permissionsService.checkUserUpdate(getUserId(), before, after);
             skipReadonly = permissionsService.getUser(getUserId())
                     .compare(after, "notificationTokens", "termsAccepted");
@@ -122,7 +125,7 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
             }
         }
         cacheManager.invalidateObject(true, entity.getClass(), entity.getId(), ObjectOperation.UPDATE);
-        actionLogger.edit(request, getUserId(), entity);
+        actionLogger.edit(request, getUserId(), stored, entity);
 
         return Response.ok(entity).build();
     }
@@ -133,10 +136,12 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         permissionsService.checkPermission(baseClass, getUserId(), id);
         permissionsService.checkEdit(getUserId(), baseClass, false, false);
 
+        T stored = storage.getObject(baseClass, new Request(
+                new Columns.All(), new Condition.Equals("id", id)));
         storage.removeObject(baseClass, new Request(new Condition.Equals("id", id)));
         cacheManager.invalidateObject(true, baseClass, id, ObjectOperation.DELETE);
 
-        actionLogger.remove(request, getUserId(), baseClass, id);
+        actionLogger.remove(request, getUserId(), baseClass, id, stored);
 
         return Response.noContent().build();
     }

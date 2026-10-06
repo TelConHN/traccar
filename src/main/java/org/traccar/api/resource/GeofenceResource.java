@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.helper.LogAction;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
 import org.traccar.model.Group;
@@ -38,6 +39,7 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -46,6 +48,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -56,6 +59,12 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
 
     @Inject
     private CacheManager cacheManager;
+
+    @Inject
+    private LogAction actionLogger;
+
+    @Context
+    private HttpServletRequest request;
 
     public GeofenceResource() {
         super(Geofence.class, "name", List.of("name"));
@@ -178,6 +187,8 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
         permissionsService.checkAdmin(getUserId());
         Geofence geofence = storage.getObject(Geofence.class, new Request(
                 new Columns.All(), new Condition.Equals("id", id)));
+        Geofence before = storage.getObject(Geofence.class, new Request(
+                new Columns.All(), new Condition.Equals("id", id)));
         if (geofence == null || userId <= 0) {
             throw new IllegalArgumentException("Geocerca o usuario inválido");
         }
@@ -199,6 +210,7 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
         storage.updateObject(geofence, new Request(
                 new Columns.Include("attributes"), new Condition.Equals("id", id)));
         cacheManager.invalidateObject(true, Geofence.class, id, ObjectOperation.UPDATE);
+        actionLogger.edit(request, getUserId(), before, geofence);
         return geofence;
     }
 

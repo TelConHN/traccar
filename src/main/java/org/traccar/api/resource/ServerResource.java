@@ -114,11 +114,13 @@ public class ServerResource extends BaseResource {
     @PUT
     public Response update(Server server) throws Exception {
         permissionsService.checkAdmin(getUserId());
+        Server stored = storage.getObject(Server.class, new Request(
+                new Columns.All(), new Condition.Equals("id", server.getId())));
         storage.updateObject(server, new Request(
                 new Columns.Exclude("id"),
                 new Condition.Equals("id", server.getId())));
         cacheManager.invalidateObject(true, Server.class, server.getId(), ObjectOperation.UPDATE);
-        actionLogger.edit(request, getUserId(), server);
+        actionLogger.edit(request, getUserId(), stored, server);
         return Response.ok(server).build();
     }
 
@@ -159,6 +161,7 @@ public class ServerResource extends BaseResource {
         try (var input = new FileInputStream(inputFile); var output = new FileOutputStream(outputPath.toFile())) {
             input.transferTo(output);
         }
+        actionLogger.server(request, getUserId(), "file", rootPath.relativize(outputPath).toString());
         return Response.ok().build();
     }
 
@@ -166,6 +169,7 @@ public class ServerResource extends BaseResource {
     @GET
     public Response gc() throws StorageException {
         permissionsService.checkAdmin(getUserId());
+        actionLogger.server(request, getUserId(), "gc", null);
         System.gc();
         return Response.ok().build();
     }
@@ -174,6 +178,7 @@ public class ServerResource extends BaseResource {
     @GET
     public String cache() throws StorageException {
         permissionsService.checkAdmin(getUserId());
+        actionLogger.server(request, getUserId(), "cache", null);
         return cacheManager.toString();
     }
 
@@ -181,6 +186,7 @@ public class ServerResource extends BaseResource {
     @POST
     public void reboot() throws StorageException {
         permissionsService.checkAdmin(getUserId());
+        actionLogger.server(request, getUserId(), "reboot", null);
         System.exit(130);
     }
 

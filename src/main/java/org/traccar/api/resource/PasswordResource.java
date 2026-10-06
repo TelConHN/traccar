@@ -17,6 +17,7 @@ package org.traccar.api.resource;
 
 import org.traccar.api.BaseResource;
 import org.traccar.api.signature.TokenManager;
+import org.traccar.helper.LogAction;
 import org.traccar.mail.MailManager;
 import org.traccar.model.User;
 import org.traccar.notification.TextTemplateFormatter;
@@ -27,12 +28,14 @@ import org.traccar.storage.query.Request;
 
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.mail.MessagingException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
@@ -50,6 +53,12 @@ public class PasswordResource extends BaseResource {
     private TokenManager tokenManager;
 
     @Inject
+    private LogAction actionLogger;
+
+    @Context
+    private HttpServletRequest request;
+
+    @Inject
     private TextTemplateFormatter textTemplateFormatter;
 
     @Path("reset")
@@ -65,6 +74,7 @@ public class PasswordResource extends BaseResource {
             var fullMessage = textTemplateFormatter.formatMessage(velocityContext, "passwordReset", false);
             mailManager.sendMessage(user, true, fullMessage.subject(), fullMessage.body());
         }
+        actionLogger.passwordReset(request, email, user != null ? user.getId() : 0);
         return Response.ok().build();
     }
 
@@ -83,6 +93,7 @@ public class PasswordResource extends BaseResource {
             storage.updateObject(user, new Request(
                     new Columns.Include("hashedPassword", "salt"),
                     new Condition.Equals("id", userId)));
+            actionLogger.passwordUpdate(request, userId);
             return Response.ok().build();
         }
         return Response.status(Response.Status.NOT_FOUND).build();

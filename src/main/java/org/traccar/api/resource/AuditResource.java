@@ -22,16 +22,17 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.traccar.api.BaseResource;
+import org.traccar.helper.model.CommandResultUtil;
 import org.traccar.model.Action;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Calendar;
+import org.traccar.model.Command;
 import org.traccar.model.Device;
 import org.traccar.model.Driver;
-import org.traccar.model.Event;
 import org.traccar.model.Geofence;
 import org.traccar.model.Group;
 import org.traccar.model.Maintenance;
-import org.traccar.model.Position;
+import org.traccar.model.Notification;
 import org.traccar.model.User;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -40,7 +41,6 @@ import org.traccar.storage.query.Order;
 import org.traccar.storage.query.Request;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,9 +54,6 @@ import java.util.function.Function;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AuditResource extends BaseResource {
 
-    // Cuánto después de un comando se sigue buscando la respuesta del equipo (si antes no se le mandó otro).
-    private static final long RESULT_WINDOW = 24 * 60 * 60 * 1000L;
-
     private static final Map<String, Class<? extends BaseModel>> NAMED_TYPES = Map.of(
             "device", Device.class,
             "user", User.class,
@@ -64,7 +61,9 @@ public class AuditResource extends BaseResource {
             "geofence", Geofence.class,
             "driver", Driver.class,
             "calendar", Calendar.class,
-            "maintenance", Maintenance.class);
+            "maintenance", Maintenance.class,
+            "notification", Notification.class,
+            "command", Command.class);
 
     // userId: cuentas o clientes. Trae lo que hizo esa cuenta y también lo que se le hizo a sus carros
     // (p. ej. un comando que la central le mandó a un carro del cliente). deviceId: solo lo de esos carros.
@@ -99,7 +98,8 @@ public class AuditResource extends BaseResource {
                 new Order("actionTime")))) {
             stream.filter(action -> actionTypes.isEmpty() || actionTypes.contains(action.getActionType()))
                     .filter(action -> {
-                        if (userIds.isEmpty() || userIds.contains(action.getUserId())) {
+                        if (userIds.isEmpty() || userIds.contains(action.getUserId())
+                                || userIds.contains(action.getLong("actorUserId"))) {
                             return true;
                         }
                         long deviceId = actionDeviceId(action);
@@ -139,6 +139,10 @@ public class AuditResource extends BaseResource {
             if (action.getObjectType() != null && action.getObjectId() > 0) {
                 action.setObjectName(names.computeIfAbsent(action.getObjectType(), loadNames)
                         .get(action.getObjectId()));
+                // Lo borrado ya no está: queda el nombre que se guardó al borrarlo.
+                if (action.getObjectName() == null) {
+                    action.setObjectName(action.getString("name"));
+                }
             }
             String ownerType = action.getString("ownerType");
             if (ownerType != null) {
@@ -146,7 +150,7 @@ public class AuditResource extends BaseResource {
             }
         }
 
-        attachCommandResults(actions);
+        CommandResultUtil.attach(storage, actions);
         return actions;
     }
 
@@ -177,99 +181,12 @@ public class AuditResource extends BaseResource {
             return calendar.getName();
         } else if (item instanceof Maintenance maintenance) {
             return maintenance.getName();
+        } else if (item instanceof Notification notification) {
+            return notification.getDescription() != null ? notification.getDescription() : notification.getType();
+        } else if (item instanceof Command command) {
+            return command.getDescription();
         }
         return null;
-    }
-
-    // La respuesta del equipo llega como evento commandResult y no dice a qué comando contesta. Se toma la
-    // primera que llegó (hora del servidor) después del comando y antes del siguiente comando a ese mismo
-    // carro, hasta 24 h. Un comando en cola cuenta desde que el equipo se conectó y se le entregó
-    // (evento queuedCommandSent con el id de la cola).
-    private void attachCommandResults(List<Action> actions) throws StorageException {
-        Map<Long, List<Action>> commandsByDevice = new HashMap<>();
-        for (Action action : actions) {
-            if ("command".equals(action.getActionType()) && "device".equals(action.getObjectType())
-                    && !"failed".equals(action.getString("status"))) {
-                commandsByDevice.computeIfAbsent(action.getObjectId(), k -> new ArrayList<>()).add(action);
-            }
-        }
-
-        for (var entry : commandsByDevice.entrySet()) {
-            long deviceId = entry.getKey();
-            List<Action> commands = entry.getValue();
-            commands.sort(Comparator.comparing(Action::getActionTime));
-
-            // eventTime es la hora del equipo, que puede venir corrida: se busca con margen y se compara
-            // con la hora del servidor de la posición.
-            Date first = new Date(commands.get(0).getActionTime().getTime() - RESULT_WINDOW);
-            Date last = new Date(commands.get(commands.size() - 1).getActionTime().getTime() + 2 * RESULT_WINDOW);
-            List<long[]> results = new ArrayList<>();
-            Map<Long, String> resultTexts = new HashMap<>();
-            Map<Long, Date> queuedSent = new HashMap<>();
-            for (Event event : storage.getObjects(Event.class, new Request(
-                    new Columns.All(),
-                    new Condition.And(
-                            new Condition.Equals("deviceId", deviceId),
-                            new Condition.Between("eventTime", first, last))))) {
-                if (Event.TYPE_COMMAND_RESULT.equals(event.getType())) {
-                    Date received = event.getEventTime();
-                    if (event.getPositionId() > 0) {
-                        Position position = storage.getObject(Position.class, new Request(
-                                new Columns.Include("serverTime"),
-                                new Condition.Equals("id", event.getPositionId())));
-                        if (position != null && position.getServerTime() != null) {
-                            received = position.getServerTime();
-                        }
-                    }
-                    results.add(new long[] {received.getTime(), event.getId()});
-                    resultTexts.put(event.getId(), event.getString(Position.KEY_RESULT));
-                } else if (Event.TYPE_QUEUED_COMMAND_SENT.equals(event.getType())) {
-                    queuedSent.put(event.getLong("id"), event.getEventTime());
-                }
-            }
-            results.sort(Comparator.comparingLong(result -> result[0]));
-
-            // Hora en que el comando le llegó de verdad al equipo; uno que sigue en cola no tiene.
-            List<Action> delivered = new ArrayList<>();
-            for (Action command : commands) {
-                long queuedCommandId = command.getLong("queuedCommandId");
-                if (queuedCommandId > 0) {
-                    Date sent = queuedSent.get(queuedCommandId);
-                    if (sent != null) {
-                        command.setQueuedSentTime(sent);
-                        delivered.add(command);
-                    }
-                } else {
-                    delivered.add(command);
-                }
-            }
-            Function<Action, Long> deliveredAt = command -> command.getQueuedSentTime() != null
-                    ? command.getQueuedSentTime().getTime() : command.getActionTime().getTime();
-            delivered.sort(Comparator.comparing(deliveredAt));
-
-            Set<Long> used = new HashSet<>();
-            for (int i = 0; i < delivered.size(); i++) {
-                Action command = delivered.get(i);
-                long start = deliveredAt.apply(command);
-                long end = start + RESULT_WINDOW;
-                // Varios comandos en cola se entregan juntos: el límite es el siguiente que salió después.
-                for (int j = i + 1; j < delivered.size(); j++) {
-                    long next = deliveredAt.apply(delivered.get(j));
-                    if (next > start) {
-                        end = Math.min(end, next);
-                        break;
-                    }
-                }
-                for (long[] result : results) {
-                    if (result[0] >= start && result[0] < end && !used.contains(result[1])) {
-                        used.add(result[1]);
-                        command.setCommandResult(resultTexts.get(result[1]));
-                        command.setCommandResultTime(new Date(result[0]));
-                        break;
-                    }
-                }
-            }
-        }
     }
 
 }

@@ -130,7 +130,7 @@ public class SessionResource extends BaseResource {
             SessionHelper.userLogin(actionLogger, request, user, null);
             return user;
         } else {
-            actionLogger.failedLogin(request);
+            actionLogger.failedLogin(request, email);
             throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED).build());
         }
     }
@@ -164,6 +164,7 @@ public class SessionResource extends BaseResource {
         RevokedToken revokedToken = new RevokedToken();
         revokedToken.setId(data.getId());
         storage.addObject(revokedToken, new Request(new Columns.Include("id")));
+        actionLogger.tokenRevoke(request, getUserId(), data.getId());
         return Response.noContent().build();
     }
 

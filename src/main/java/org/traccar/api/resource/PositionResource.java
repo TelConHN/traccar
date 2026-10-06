@@ -18,6 +18,7 @@ package org.traccar.api.resource;
 import org.traccar.api.BaseResource;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
+import org.traccar.helper.LogAction;
 import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
@@ -32,6 +33,7 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.DELETE;
@@ -40,6 +42,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -58,6 +61,12 @@ public class PositionResource extends BaseResource {
 
     @Inject
     private Config config;
+
+    @Inject
+    private LogAction actionLogger;
+
+    @Context
+    private HttpServletRequest httpRequest;
 
     @Inject
     private KmlExportProvider kmlExportProvider;
@@ -137,6 +146,8 @@ public class PositionResource extends BaseResource {
         permissionsService.checkPermission(Device.class, getUserId(), position.getDeviceId());
 
         storage.removeObject(Position.class, request);
+        actionLogger.removePositions(
+                httpRequest, getUserId(), position.getDeviceId(), positionId, position.getFixTime(), null);
         return Response.status(Response.Status.NO_CONTENT).build();
     }
 
@@ -151,6 +162,7 @@ public class PositionResource extends BaseResource {
         conditions.add(new Condition.Equals("deviceId", deviceId));
         conditions.add(new Condition.Between("fixTime", from, to));
         storage.removeObject(Position.class, new Request(Condition.merge(conditions)));
+        actionLogger.removePositions(httpRequest, getUserId(), deviceId, 0, from, to);
 
         return Response.status(Response.Status.NO_CONTENT).build();
     }

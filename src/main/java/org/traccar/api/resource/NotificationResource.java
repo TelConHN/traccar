@@ -16,6 +16,7 @@
 package org.traccar.api.resource;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -23,11 +24,13 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.helper.LogAction;
 import org.traccar.model.Event;
 import org.traccar.model.ManagedUser;
 import org.traccar.model.Notification;
@@ -59,6 +62,12 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
 
     @Inject
     private NotificatorManager notificatorManager;
+
+    @Inject
+    private LogAction actionLogger;
+
+    @Context
+    private HttpServletRequest request;
 
     public NotificationResource() {
         super(Notification.class, "description", List.of("description"));
@@ -136,11 +145,14 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
                         User.class, new Request(new Columns.All(), Condition.merge(conditions))));
             }
         }
+        int count = 0;
         for (User user : users) {
             if (!user.getTemporary()) {
                 notificatorManager.getNotificator(notificator).send(user, message, null, null);
+                count += 1;
             }
         }
+        actionLogger.message(request, getUserId(), notificator, userIds, count, message.subject());
         return Response.noContent().build();
     }
 
