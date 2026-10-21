@@ -21,6 +21,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.traccar.api.BaseResource;
 import org.traccar.helper.model.CommandResultUtil;
 import org.traccar.model.Action;
@@ -29,10 +30,12 @@ import org.traccar.model.Calendar;
 import org.traccar.model.Command;
 import org.traccar.model.Device;
 import org.traccar.model.Driver;
+import org.traccar.model.Event;
 import org.traccar.model.Geofence;
 import org.traccar.model.Group;
 import org.traccar.model.Maintenance;
 import org.traccar.model.Notification;
+import org.traccar.model.Position;
 import org.traccar.model.User;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -41,6 +44,7 @@ import org.traccar.storage.query.Order;
 import org.traccar.storage.query.Request;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -65,16 +69,30 @@ public class AuditResource extends BaseResource {
             "notification", Notification.class,
             "command", Command.class);
 
+    // Lo que hace el GPS (geocercas, alarmas, desconexión…) no está en tc_actions sino en tc_events; se agrega
+    // como acción "event". Un mes de todos los carros puede traer cientos de miles (sobre todo en línea /
+    // fuera de línea): se mandan los primeros y el encabezado avisa que hubo más.
+    private static final String ACTION_EVENT = "event";
+    private static final int MAX_EVENTS = 20000;
+    private static final String EVENTS_TRUNCATED_HEADER = "X-Audit-Events-Truncated";
+
     // userId: cuentas o clientes. Trae lo que hizo esa cuenta y también lo que se le hizo a sus carros
     // (p. ej. un comando que la central le mandó a un carro del cliente). deviceId: solo lo de esos carros.
-    // actionType: login, command, edit, etc. Los tres filtros se combinan (y).
+    // actionType: login, command, edit, event, etc. eventType: geofenceEnter, alarm (todas las alarmas),
+    // alarm:powerCut (solo esa)…; elegir solo tipos de evento trae solo eventos. Los filtros se combinan (y).
     @GET
-    public List<Action> get(
+    public Response get(
             @QueryParam("from") Date from, @QueryParam("to") Date to,
             @QueryParam("userId") List<Long> userIds,
             @QueryParam("deviceId") List<Long> deviceIds,
-            @QueryParam("actionType") List<String> actionTypes) throws StorageException {
+            @QueryParam("actionType") List<String> actionTypes,
+            @QueryParam("eventType") List<String> eventTypes) throws StorageException {
         permissionsService.checkAdmin(getUserId());
+
+        boolean wantActions = actionTypes.isEmpty()
+                ? eventTypes.isEmpty()
+                : actionTypes.stream().anyMatch(type -> !ACTION_EVENT.equals(type));
+        boolean wantEvents = actionTypes.isEmpty() || actionTypes.contains(ACTION_EVENT) || !eventTypes.isEmpty();
 
         Map<Long, User> users = new HashMap<>();
         for (User user : storage.getObjects(User.class, new Request(new Columns.All()))) {
@@ -92,24 +110,13 @@ public class AuditResource extends BaseResource {
         }
 
         List<Action> actions = new ArrayList<>();
-        try (var stream = storage.getObjectsStream(Action.class, new Request(
-                new Columns.All(),
-                new Condition.Between("actionTime", from, to),
-                new Order("actionTime")))) {
-            stream.filter(action -> actionTypes.isEmpty() || actionTypes.contains(action.getActionType()))
-                    .filter(action -> {
-                        if (userIds.isEmpty() || userIds.contains(action.getUserId())
-                                || userIds.contains(action.getLong("actorUserId"))) {
-                            return true;
-                        }
-                        long deviceId = actionDeviceId(action);
-                        return deviceId > 0 && clientDevices.contains(deviceId)
-                                || "user".equals(action.getString("ownerType"))
-                                        && userIds.contains(action.getLong("ownerId"))
-                                || "user".equals(action.getObjectType()) && userIds.contains(action.getObjectId());
-                    })
-                    .filter(action -> deviceIds.isEmpty() || deviceIds.contains(actionDeviceId(action)))
-                    .forEach(actions::add);
+        if (wantActions) {
+            loadActions(actions, from, to, userIds, deviceIds, actionTypes, clientDevices);
+        }
+        int eventCount = 0;
+        if (wantEvents) {
+            eventCount = loadEvents(actions, from, to, userIds, deviceIds, eventTypes, clientDevices);
+            actions.sort(Comparator.comparing(Action::getActionTime));
         }
 
         Map<String, Map<Long, String>> names = new HashMap<>();
@@ -129,6 +136,7 @@ public class AuditResource extends BaseResource {
             }
             return result;
         };
+        Map<String, String> driverNames = null;
 
         for (Action action : actions) {
             User user = users.get(action.getUserId());
@@ -148,10 +156,155 @@ public class AuditResource extends BaseResource {
             if (ownerType != null) {
                 action.setOwnerName(names.computeIfAbsent(ownerType, loadNames).get(action.getLong("ownerId")));
             }
+            if (ACTION_EVENT.equals(action.getActionType())) {
+                long geofenceId = action.getLong("geofenceId");
+                if (geofenceId > 0) {
+                    action.set("geofenceName", names.computeIfAbsent("geofence", loadNames).get(geofenceId));
+                }
+                long maintenanceId = action.getLong("maintenanceId");
+                if (maintenanceId > 0) {
+                    action.set("maintenanceName",
+                            names.computeIfAbsent("maintenance", loadNames).get(maintenanceId));
+                }
+                String driverUniqueId = action.getString(Position.KEY_DRIVER_UNIQUE_ID);
+                if (driverUniqueId != null) {
+                    if (driverNames == null) {
+                        driverNames = new HashMap<>();
+                        for (Driver driver : storage.getObjects(Driver.class, new Request(new Columns.All()))) {
+                            for (String form : driverIdForms(driver.getUniqueId())) {
+                                driverNames.putIfAbsent(form, driver.getName());
+                            }
+                        }
+                    }
+                    for (String form : driverIdForms(driverUniqueId)) {
+                        String driverName = driverNames.get(form);
+                        if (driverName != null) {
+                            action.set("driverName", driverName);
+                            break;
+                        }
+                    }
+                }
+                // A quién se avisó (lo guarda NotificationManager): se agrega el nombre de cada cuenta.
+                if (action.getAttributes().get("notified") instanceof List<?> deliveries) {
+                    for (Object delivery : deliveries) {
+                        if (delivery instanceof Map<?, ?> map && map.get("userId") instanceof Number userId) {
+                            User recipient = users.get(userId.longValue());
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> values = (Map<String, Object>) map;
+                            values.put("name", recipient != null ? userLabel(recipient) : "#" + userId);
+                        }
+                    }
+                }
+            }
         }
 
         CommandResultUtil.attach(storage, actions);
-        return actions;
+        Response.ResponseBuilder response = Response.ok(actions);
+        if (eventCount > MAX_EVENTS) {
+            response.header(EVENTS_TRUNCATED_HEADER, MAX_EVENTS);
+        }
+        return response.build();
+    }
+
+    private void loadActions(
+            List<Action> actions, Date from, Date to, List<Long> userIds, List<Long> deviceIds,
+            List<String> actionTypes, Set<Long> clientDevices) throws StorageException {
+        try (var stream = storage.getObjectsStream(Action.class, new Request(
+                new Columns.All(),
+                new Condition.Between("actionTime", from, to),
+                new Order("actionTime")))) {
+            stream.filter(action -> actionTypes.isEmpty() || actionTypes.contains(action.getActionType()))
+                    .filter(action -> {
+                        if (userIds.isEmpty() || userIds.contains(action.getUserId())
+                                || userIds.contains(action.getLong("actorUserId"))) {
+                            return true;
+                        }
+                        long deviceId = actionDeviceId(action);
+                        return deviceId > 0 && clientDevices.contains(deviceId)
+                                || "user".equals(action.getString("ownerType"))
+                                        && userIds.contains(action.getLong("ownerId"))
+                                || "user".equals(action.getObjectType()) && userIds.contains(action.getObjectId());
+                    })
+                    .filter(action -> deviceIds.isEmpty() || deviceIds.contains(actionDeviceId(action)))
+                    .forEach(actions::add);
+        }
+    }
+
+    // Devuelve cuántos eventos había (hasta MAX_EVENTS + 1); agrega a la lista solo los primeros MAX_EVENTS.
+    // Con carros elegidos (o los de los clientes elegidos) se consulta carro por carro: tc_events está
+    // particionada e indexada por carro y hora.
+    private int loadEvents(
+            List<Action> actions, Date from, Date to, List<Long> userIds, List<Long> deviceIds,
+            List<String> eventTypes, Set<Long> clientDevices) throws StorageException {
+        List<Long> devices = null;
+        if (!userIds.isEmpty()) {
+            devices = new ArrayList<>(clientDevices);
+            if (!deviceIds.isEmpty()) {
+                devices.retainAll(deviceIds);
+            }
+        } else if (!deviceIds.isEmpty()) {
+            devices = deviceIds;
+        }
+
+        List<Condition> conditions = new ArrayList<>();
+        if (devices == null) {
+            conditions.add(new Condition.Between("eventTime", from, to));
+        } else {
+            for (long deviceId : devices) {
+                conditions.add(new Condition.And(
+                        new Condition.Equals("deviceId", deviceId),
+                        new Condition.Between("eventTime", from, to)));
+            }
+        }
+
+        int count = 0;
+        for (Condition condition : conditions) {
+            try (var stream = storage.getObjectsStream(Event.class, new Request(
+                    new Columns.All(), condition, new Order("eventTime")))) {
+                var iterator = stream.filter(event -> matchesEventType(event, eventTypes)).iterator();
+                while (iterator.hasNext() && count <= MAX_EVENTS) {
+                    Event event = iterator.next();
+                    count += 1;
+                    if (count <= MAX_EVENTS) {
+                        actions.add(eventAction(event));
+                    }
+                }
+            }
+            if (count > MAX_EVENTS) {
+                break;
+            }
+        }
+        return count;
+    }
+
+    private static boolean matchesEventType(Event event, List<String> eventTypes) {
+        if (eventTypes.isEmpty() || eventTypes.contains(event.getType())) {
+            return true;
+        }
+        return Event.TYPE_ALARM.equals(event.getType())
+                && eventTypes.contains(Event.TYPE_ALARM + ":" + event.getString(Position.KEY_ALARM));
+    }
+
+    // Id negativo: no choca con los de tc_actions en la misma lista.
+    private static Action eventAction(Event event) {
+        Action action = new Action();
+        action.setId(-event.getId());
+        action.setActionType(ACTION_EVENT);
+        action.setActionTime(event.getEventTime());
+        action.setObjectType("device");
+        action.setObjectId(event.getDeviceId());
+        action.getAttributes().putAll(event.getAttributes());
+        action.set("eventType", event.getType());
+        if (event.getGeofenceId() > 0) {
+            action.set("geofenceId", event.getGeofenceId());
+        }
+        if (event.getMaintenanceId() > 0) {
+            action.set("maintenanceId", event.getMaintenanceId());
+        }
+        if (event.getPositionId() > 0) {
+            action.set("positionId", event.getPositionId());
+        }
+        return action;
     }
 
     private static long actionDeviceId(Action action) {
@@ -162,6 +315,24 @@ public class AuditResource extends BaseResource {
             return action.getLong("ownerId");
         }
         return 0;
+    }
+
+    // Igual que DriverValue.js en la web: el lector manda el código como lo lee (a veces en hexadecimal,
+    // con ceros o en minúsculas) y el conductor se carga a mano, quizás en decimal. Primero la forma exacta.
+    private static List<String> driverIdForms(String value) {
+        String id = value != null ? value.replaceAll("\\s+", "").toUpperCase().replaceFirst("^0+(?=.)", "") : "";
+        List<String> forms = new ArrayList<>(List.of(id));
+        try {
+            if (id.matches("[0-9A-F]{1,12}")) {
+                forms.add(String.valueOf(Long.parseLong(id, 16)));
+            }
+            if (id.matches("[0-9]{1,15}")) {
+                forms.add(Long.toHexString(Long.parseLong(id)).toUpperCase());
+            }
+        } catch (NumberFormatException e) {
+            return forms;
+        }
+        return forms;
     }
 
     private static String userLabel(User user) {

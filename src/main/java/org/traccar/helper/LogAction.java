@@ -175,17 +175,19 @@ public final class LogAction {
         logLoginAction(request, ACTION_LOGOUT, userId);
     }
 
+    // El id de un token es de 63 bits y tc_actions.objectid es INT: puesto ahí, el registro no se guardaba.
+    // Va como texto en los atributos.
     public void token(HttpServletRequest request, long userId, long tokenId) {
         Action action = newAction(request, userId, ACTION_CREATE);
         action.setObjectType("token");
-        action.setObjectId(tokenId);
+        action.set("tokenId", String.valueOf(tokenId));
         storeAction(action);
     }
 
     public void tokenRevoke(HttpServletRequest request, long userId, long tokenId) {
         Action action = newAction(request, userId, ACTION_REMOVE);
         action.setObjectType("token");
-        action.setObjectId(tokenId);
+        action.set("tokenId", String.valueOf(tokenId));
         storeAction(action);
     }
 

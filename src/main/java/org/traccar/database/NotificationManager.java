@@ -30,19 +30,24 @@ import org.traccar.model.Event;
 import org.traccar.model.Geofence;
 import org.traccar.model.Maintenance;
 import org.traccar.model.Position;
+import org.traccar.model.User;
 import org.traccar.notification.MessageException;
 import org.traccar.notification.NotificatorManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
+import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.annotation.Nullable;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -51,6 +56,17 @@ import java.util.Set;
 public class NotificationManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificationManager.class);
+
+    // A quién se le avisó y por qué canal queda en el mismo evento, para que la Auditoría muestre si el aviso
+    // salió. "sent" es que el canal lo aceptó sin error, no que la persona lo leyó.
+    private static final String DELIVERY_SENT = "sent";
+    private static final String DELIVERY_FAILED = "failed";
+    private static final String DELIVERY_BLOCKED = "blocked";
+    private static final String DELIVERY_NO_PHONE = "noPhone";
+    private static final String DELIVERY_NO_APP = "noApp";
+    // tc_events.attributes es VARCHAR(4000) y el evento ya trae lo suyo.
+    private static final int MAX_DELIVERIES = 20;
+    private static final int MAX_ERROR_LENGTH = 80;
 
     private final Storage storage;
     private final CacheManager cacheManager;
@@ -137,24 +153,85 @@ public class NotificationManager {
             }
 
             boolean skipAdministrators = geofenceSkipsAdministrators(event);
+            Map<String, Map<String, Object>> deliveries = new LinkedHashMap<>();
             notifications.forEach(notification -> {
                 cacheManager.getNotificationUsers(notification.getId(), event.getDeviceId()).forEach(user -> {
                     if (blockedUsers.contains(user.getId())) {
                         LOGGER.info("User {} notification blocked", user.getId());
+                        addDelivery(deliveries, user, null, DELIVERY_BLOCKED, null);
                         return;
                     }
                     if (skipAdministrators && user.getAdministrator()) {
                         return;
                     }
                     for (String notificator : notification.getNotificatorsTypes()) {
+                        String skipped = skippedReason(notificator, user);
+                        if (skipped != null) {
+                            addDelivery(deliveries, user, notificator, skipped, null);
+                            continue;
+                        }
                         try {
                             notificatorManager.getNotificator(notificator).send(notification, user, event, position);
+                            addDelivery(deliveries, user, notificator, DELIVERY_SENT, null);
                         } catch (MessageException exception) {
                             LOGGER.warn("Notification failed", exception);
+                            addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
+                        } catch (RuntimeException exception) {
+                            // Canal no habilitado en el servidor (o que revienta): antes cortaba el envío a
+                            // todas las demás cuentas y canales de este evento.
+                            LOGGER.warn("Notification failed", exception);
+                            addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
                         }
                     }
                 });
             });
+            storeDeliveries(event, deliveries);
+        }
+    }
+
+    // Casos en que el canal no manda nada y no da error: sin esto se verían como "enviado".
+    private static String skippedReason(String notificator, User user) {
+        return switch (notificator) {
+            case "sms", "whatsapp" -> user.getPhone() == null || user.getPhone().isBlank() ? DELIVERY_NO_PHONE : null;
+            case "firebase" -> user.hasAttribute("notificationTokens") ? null : DELIVERY_NO_APP;
+            default -> null;
+        };
+    }
+
+    private static void addDelivery(
+            Map<String, Map<String, Object>> deliveries, User user, String channel, String status, String error) {
+        Map<String, Object> delivery = new LinkedHashMap<>();
+        delivery.put("userId", user.getId());
+        if (channel != null) {
+            delivery.put("channel", channel);
+        }
+        delivery.put("status", status);
+        if (error != null) {
+            delivery.put("error", error.length() > MAX_ERROR_LENGTH ? error.substring(0, MAX_ERROR_LENGTH) : error);
+        }
+        // La misma cuenta puede estar en dos notificaciones del mismo tipo: se anota una vez por canal.
+        deliveries.putIfAbsent(user.getId() + ":" + channel, delivery);
+    }
+
+    private void storeDeliveries(Event event, Map<String, Map<String, Object>> deliveries) {
+        if (deliveries.isEmpty() || event.getId() == 0) {
+            return;
+        }
+        List<Map<String, Object>> list = new ArrayList<>(deliveries.values());
+        if (list.size() > MAX_DELIVERIES) {
+            event.set("notifiedOmitted", list.size() - MAX_DELIVERIES);
+            list = new ArrayList<>(list.subList(0, MAX_DELIVERIES));
+        }
+        event.getAttributes().put("notified", list);
+        try {
+            // Con la hora el UPDATE va directo a la partición del evento (tc_events es hypertable).
+            storage.updateObject(event, new Request(
+                    new Columns.Include("attributes"),
+                    new Condition.And(
+                            new Condition.Equals("id", event.getId()),
+                            new Condition.Equals("eventTime", event.getEventTime()))));
+        } catch (StorageException error) {
+            LOGGER.warn("Event delivery save error", error);
         }
     }
 

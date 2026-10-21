@@ -403,6 +403,15 @@ public final class Keys {
             0.0);
 
     /**
+     * Vehicle voltage (power attribute, in volts) below which a lowVoltage alarm is generated, for devices that do
+     * not send their own low battery alarm. Use around 23 for 24 V trucks. Zero disables voltage alarms.
+     */
+    public static final ConfigKey<Double> EVENT_LOW_VOLTAGE_THRESHOLD = new DoubleConfigKey(
+            "lowVoltageThreshold",
+            List.of(KeyType.SERVER, KeyType.DEVICE),
+            11.5);
+
+    /**
      * Fuel increase threshold value. When fuel level increases from one position to another by more than this value,
      * an event is generated.
      */
