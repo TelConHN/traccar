@@ -74,6 +74,7 @@ public class AuditResource extends BaseResource {
     // fuera de línea): se mandan los primeros y el encabezado avisa que hubo más.
     private static final String ACTION_EVENT = "event";
     private static final int MAX_EVENTS = 20000;
+    private static final int MAX_DEVICE_QUERIES = 50;
     private static final String EVENTS_TRUNCATED_HEADER = "X-Audit-Events-Truncated";
 
     // userId: cuentas o clientes. Trae lo que hizo esa cuenta y también lo que se le hizo a sus carros
@@ -99,12 +100,22 @@ public class AuditResource extends BaseResource {
             users.put(user.getId(), user);
         }
 
+        // Carros de cada cuenta elegida, también los que ve por grupo. Para las acciones solo cuentan los de
+        // clientes: con una cuenta administradora saldría todo lo que cualquiera le hizo a cualquier carro.
+        // Para los eventos cuentan los de todas: son los carros de los que esa cuenta recibe avisos, y antes
+        // una cuenta administradora no traía ningún evento.
         Set<Long> clientDevices = new HashSet<>();
-        if (!userIds.isEmpty()) {
-            for (var permission : storage.getPermissions(User.class, Device.class)) {
-                User owner = users.get(permission.getOwnerId());
-                if (owner != null && !owner.getAdministrator() && userIds.contains(owner.getId())) {
-                    clientDevices.add(permission.getPropertyId());
+        Set<Long> accountDevices = new HashSet<>();
+        for (long userId : userIds) {
+            User owner = users.get(userId);
+            if (owner == null) {
+                continue;
+            }
+            for (Device device : storage.getObjects(Device.class, new Request(
+                    new Columns.Include("id"), new Condition.Permission(User.class, userId, Device.class)))) {
+                accountDevices.add(device.getId());
+                if (!owner.getAdministrator()) {
+                    clientDevices.add(device.getId());
                 }
             }
         }
@@ -115,7 +126,7 @@ public class AuditResource extends BaseResource {
         }
         int eventCount = 0;
         if (wantEvents) {
-            eventCount = loadEvents(actions, from, to, userIds, deviceIds, eventTypes, clientDevices);
+            eventCount = loadEvents(actions, from, to, userIds, deviceIds, eventTypes, accountDevices);
             actions.sort(Comparator.comparing(Action::getActionTime));
         }
 
@@ -231,24 +242,27 @@ public class AuditResource extends BaseResource {
     }
 
     // Devuelve cuántos eventos había (hasta MAX_EVENTS + 1); agrega a la lista solo los primeros MAX_EVENTS.
-    // Con carros elegidos (o los de los clientes elegidos) se consulta carro por carro: tc_events está
-    // particionada e indexada por carro y hora.
+    // Con pocos carros elegidos (o los de las cuentas elegidas) se consulta carro por carro: tc_events está
+    // particionada e indexada por carro y hora. Con muchos (una cuenta administradora ve casi todos) sale
+    // mejor una sola consulta por fecha, quedándose con los de esos carros.
     private int loadEvents(
             List<Action> actions, Date from, Date to, List<Long> userIds, List<Long> deviceIds,
-            List<String> eventTypes, Set<Long> clientDevices) throws StorageException {
-        List<Long> devices = null;
+            List<String> eventTypes, Set<Long> accountDevices) throws StorageException {
+        Set<Long> devices = null;
         if (!userIds.isEmpty()) {
-            devices = new ArrayList<>(clientDevices);
+            devices = new HashSet<>(accountDevices);
             if (!deviceIds.isEmpty()) {
                 devices.retainAll(deviceIds);
             }
         } else if (!deviceIds.isEmpty()) {
-            devices = deviceIds;
+            devices = new HashSet<>(deviceIds);
         }
 
         List<Condition> conditions = new ArrayList<>();
-        if (devices == null) {
+        Set<Long> deviceFilter = null;
+        if (devices == null || devices.size() > MAX_DEVICE_QUERIES) {
             conditions.add(new Condition.Between("eventTime", from, to));
+            deviceFilter = devices;
         } else {
             for (long deviceId : devices) {
                 conditions.add(new Condition.And(
@@ -261,7 +275,10 @@ public class AuditResource extends BaseResource {
         for (Condition condition : conditions) {
             try (var stream = storage.getObjectsStream(Event.class, new Request(
                     new Columns.All(), condition, new Order("eventTime")))) {
-                var iterator = stream.filter(event -> matchesEventType(event, eventTypes)).iterator();
+                Set<Long> onlyDevices = deviceFilter;
+                var iterator = stream
+                        .filter(event -> onlyDevices == null || onlyDevices.contains(event.getDeviceId()))
+                        .filter(event -> matchesEventType(event, eventTypes)).iterator();
                 while (iterator.hasNext() && count <= MAX_EVENTS) {
                     Event event = iterator.next();
                     count += 1;
