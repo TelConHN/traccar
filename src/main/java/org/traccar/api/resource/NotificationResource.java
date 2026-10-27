@@ -58,6 +58,8 @@ import java.util.stream.Collectors;
 @Consumes(MediaType.APPLICATION_JSON)
 public class NotificationResource extends ExtendedObjectResource<Notification> {
 
+    private static final String KEY_ANNOUNCEMENTS = "anunciosEnabled";
+
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificationResource.class);
 
     @Inject
@@ -124,6 +126,12 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
             @PathParam("notificator") String notificator, @QueryParam("userId") List<Long> userIds,
             NotificationMessage message) throws MessageException, StorageException {
         permissionsService.checkManager(getUserId());
+        // "Mostrar anuncio" es un servicio que la administración le habilita a una cuenta; antes solo
+        // se escondía el menú y cualquier encargado podía mandar mensajes a sus usuarios por la API.
+        if (permissionsService.notAdmin(getUserId())
+                && !permissionsService.getUser(getUserId()).getBoolean(KEY_ANNOUNCEMENTS)) {
+            throw new SecurityException("Announcements not enabled");
+        }
         List<User> users;
         if (userIds.isEmpty()) {
             if (permissionsService.notAdmin(getUserId())) {
@@ -147,7 +155,8 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
         }
         int count = 0;
         for (User user : users) {
-            if (!user.getTemporary()) {
+            // Un id que no es suyo no se encuentra (null): se salta en vez de fallar con error 500.
+            if (user != null && !user.getTemporary()) {
                 notificatorManager.getNotificator(notificator).send(user, message, null, null);
                 count += 1;
             }

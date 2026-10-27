@@ -22,14 +22,19 @@ import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.traccar.api.security.ClientRestrictions;
 import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.LogRecord;
 import org.traccar.model.Position;
+import org.traccar.model.User;
 import org.traccar.session.ConnectionManager;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
+import org.traccar.storage.query.Columns;
+import org.traccar.storage.query.Condition;
+import org.traccar.storage.query.Request;
 
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
@@ -86,10 +91,24 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
         try {
             JsonNode json = objectMapper.readTree(message);
             if (json.hasNonNull("logs")) {
-                includeLogs = json.get("logs").asBoolean();
+                includeLogs = json.get("logs").asBoolean() && logsAllowed();
             }
         } catch (JsonProcessingException e) {
             LOGGER.warn("Socket JSON parsing error", e);
+        }
+    }
+
+    // Lo que manda el GPS tal cual (reporte "Registros"): solo con ese reporte habilitado. Antes
+    // bastaba con pedirlo por el socket.
+    private boolean logsAllowed() {
+        try {
+            User user = storage.getObject(User.class, new Request(
+                    new Columns.All(), new Condition.Equals("id", userId)));
+            return user != null && (user.getAdministrator()
+                    || !user.getDisableReports() && ClientRestrictions.reportAllowed(user, "logs"));
+        } catch (StorageException e) {
+            LOGGER.warn("Socket user lookup error", e);
+            return false;
         }
     }
 

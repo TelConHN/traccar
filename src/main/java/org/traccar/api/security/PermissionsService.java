@@ -98,6 +98,15 @@ public class PermissionsService {
         }
     }
 
+    // Además de "Deshabilitar informes", el reporte tiene que estar entre los que la administración
+    // le marcó a la cuenta (ver ClientRestrictions). Antes eso solo escondía el menú.
+    public void checkReport(long userId, String... reports) throws StorageException, SecurityException {
+        checkRestriction(userId, UserRestrictions::getDisableReports);
+        if (!ClientRestrictions.reportAllowed(getUser(userId), reports)) {
+            throw new SecurityException("Report access denied");
+        }
+    }
+
     public void checkEdit(
             long userId, Class<?> clazz, boolean addition, boolean skipReadonly)
             throws StorageException, SecurityException {

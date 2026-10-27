@@ -59,6 +59,10 @@ import java.util.stream.Stream;
 @Consumes(MediaType.APPLICATION_JSON)
 public class PositionResource extends BaseResource {
 
+    // Las descargas KML/CSV/GPX entregan el mismo historial y antes no revisaban ningún permiso de
+    // reportes (ni "Deshabilitar informes").
+    private static final String[] HISTORY_REPORTS = {"replay", "route"};
+
     @Inject
     private Config config;
 
@@ -94,7 +98,8 @@ public class PositionResource extends BaseResource {
         } else if (deviceId > 0) {
             permissionsService.checkPermission(Device.class, getUserId(), deviceId);
             if (from != null && to != null) {
-                permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
+                // Historial por fechas: lo piden el recorrido (replay) y el reporte de Posiciones.
+                permissionsService.checkReport(getUserId(), HISTORY_REPORTS);
 
                 Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
                         new Columns.All(), new Condition.Equals("id", geofenceId)));
@@ -174,6 +179,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        permissionsService.checkReport(getUserId(), HISTORY_REPORTS);
         StreamingOutput stream = output -> {
             try {
                 kmlExportProvider.generate(output, deviceId, from, to);
@@ -192,6 +198,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId, @QueryParam("geofenceId") long geofenceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        permissionsService.checkReport(getUserId(), HISTORY_REPORTS);
         StreamingOutput stream = output -> {
             try {
                 csvExportProvider.generate(output, getUserId(), deviceId, geofenceId, from, to);
@@ -210,6 +217,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        permissionsService.checkReport(getUserId(), HISTORY_REPORTS);
         StreamingOutput stream = output -> {
             try {
                 gpxExportProvider.generate(output, deviceId, from, to);

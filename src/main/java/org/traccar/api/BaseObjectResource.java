@@ -18,6 +18,7 @@ package org.traccar.api;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
+import org.traccar.api.security.ClientRestrictions;
 import org.traccar.api.security.ServiceAccountUser;
 import org.traccar.model.ObjectOperation;
 import org.traccar.helper.LogAction;
@@ -77,6 +78,9 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
     @POST
     public Response add(T entity) throws Exception {
         permissionsService.checkEdit(getUserId(), entity, true, false);
+        if (permissionsService.notAdmin(getUserId())) {
+            ClientRestrictions.keepProtected(entity, null);
+        }
 
         entity.setId(storage.addObject(entity, new Request(new Columns.Exclude("id"))));
         actionLogger.create(request, getUserId(), entity);
@@ -99,6 +103,10 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         // Cómo estaba antes, para que la auditoría guarde qué cambió.
         T stored = storage.getObject(baseClass, new Request(
                 new Columns.All(), new Condition.Equals("id", entity.getId())));
+        // Lo que habilita la administración (reportes, módulos, límite…) se queda como estaba.
+        if (permissionsService.notAdmin(getUserId())) {
+            ClientRestrictions.keepProtected(entity, stored);
+        }
 
         boolean skipReadonly = false;
         if (entity instanceof User after) {

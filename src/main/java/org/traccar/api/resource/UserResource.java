@@ -21,6 +21,7 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
+import org.traccar.api.security.ClientRestrictions;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.LogAction;
@@ -102,6 +103,9 @@ public class UserResource extends BaseObjectResource<User> {
         User currentUser = getUserId() > 0 ? permissionsService.getUser(getUserId()) : null;
         if (currentUser == null || !currentUser.getAdministrator()) {
             permissionsService.checkUserUpdate(getUserId(), new User(), entity);
+            // Ni un encargado ni el registro abierto pueden crear una cuenta con reportes o
+            // servicios ya habilitados: eso lo hace la administración.
+            ClientRestrictions.keepProtected(entity, null);
             if (currentUser != null && currentUser.getUserLimit() != 0) {
                 int userLimit = currentUser.getUserLimit();
                 if (userLimit > 0) {
