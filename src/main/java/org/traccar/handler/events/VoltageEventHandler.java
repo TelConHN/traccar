@@ -35,13 +35,17 @@ import java.util.concurrent.ConcurrentHashMap;
 //  - lowVoltage: dos reportes seguidos bajo el umbral (uno solo es el bajón normal al arrancar el motor).
 //  - powerDisconnected: el voltaje cae a casi cero (le quitaron la batería o cortaron el cable).
 //  - powerReconnected: vuelve después de una desconexión.
-// Solo se avisa después de haber visto un voltaje normal desde que arrancó el servidor: así un equipo que
-// manda "power" en otra escala (o siempre 0) no salta nunca, y un reinicio no repite las alarmas.
+// Solo se avisa después de haber visto el voltaje en el umbral o más desde que arrancó el servidor: así un
+// equipo que manda "power" en otra escala (o siempre 0) no salta nunca, y un reinicio no repite las alarmas.
+// Para armarse y para dar la batería por puesta basta el umbral, sin HYSTERESIS: una batería gastada que
+// reposa en 11.97 V nunca llegaba a 12 V y la desconexión no avisaba nunca (Explorer JDG5705, 2 nov,
+// después del reinicio del despliegue).
 // Cada alarma sale una sola vez por episodio: la batería se da por recuperada cuando pasa RECOVERY_MS
 // seguidos sobre umbral + HYSTERESIS. Antes bastaba un reporte, y un voltaje que oscila entre 11 y 12.3 V
 // (un reporte cada 10 s) repetía la alarma de voltaje bajo diez veces en media hora.
-// La desconexión se vuelve a avisar antes: basta REARM_DISCONNECT_MS con la batería puesta. Quitar la
-// batería, ponerla un par de minutos y volver a quitarla es algo que el cliente tiene que saber (2 nov:
+// La desconexión se vuelve a avisar antes: basta REARM_DISCONNECT_MS con la batería puesta (en el umbral o
+// más). Quitar la batería, ponerla un par de minutos y volver a quitarla es algo que el cliente tiene que
+// saber (2 nov:
 // Explorer JDG5705, cuatro desconexiones con reconexiones de 40 s a 2 min y una sola alarma). Un cable
 // flojo que salta en cada reporte no llega a los 30 s y sigue avisando una vez.
 @Singleton
@@ -64,6 +68,8 @@ public class VoltageEventHandler extends BaseEventHandler {
         private int lowCount;
         // Desde cuándo el voltaje está sobre umbral + HYSTERESIS sin interrupción (hora del GPS).
         private Date normalSince;
+        // Desde cuándo hay batería (voltaje en el umbral o más) sin interrupción.
+        private Date presentSince;
         // Una desconexión y una reconexión por episodio: un cable flojo no las repite en cada vaivén.
         private boolean disconnectAlerted;
         private boolean reconnectAlerted;
@@ -94,7 +100,7 @@ public class VoltageEventHandler extends BaseEventHandler {
         double power = position.getDouble(Position.KEY_POWER);
         State state = states.get(position.getDeviceId());
         if (state == null) {
-            if (power >= threshold + HYSTERESIS) {
+            if (power >= threshold) {
                 states.put(position.getDeviceId(), new State());
             }
             return;
@@ -102,46 +108,54 @@ public class VoltageEventHandler extends BaseEventHandler {
 
         if (power < DISCONNECTED_VOLTAGE) {
             state.normalSince = null;
+            state.presentSince = null;
             state.level = Level.DISCONNECTED;
             if (!state.disconnectAlerted) {
                 state.disconnectAlerted = true;
                 callback.eventDetected(alarm(position, ALARM_POWER_DISCONNECTED, power, threshold));
             }
-        } else if (power < threshold) {
+            return;
+        }
+        if (power < threshold) {
             state.normalSince = null;
+            state.presentSince = null;
             state.lowCount += 1;
             if (state.level == Level.NORMAL && state.lowCount >= 2) {
                 state.level = Level.LOW;
                 callback.eventDetected(alarm(position, ALARM_LOW_VOLTAGE, power, threshold));
             }
-        } else if (power < threshold + HYSTERESIS) {
+            return;
+        }
+
+        state.lowCount = 0;
+        if (state.level == Level.DISCONNECTED) {
+            // Sigue siendo el mismo episodio hasta que el voltaje se sostenga: queda como batería baja.
+            state.level = Level.LOW;
+            if (!state.reconnectAlerted) {
+                state.reconnectAlerted = true;
+                callback.eventDetected(alarm(position, ALARM_POWER_RECONNECTED, power, threshold));
+            }
+        }
+        Date time = position.getFixTime();
+        if (state.presentSince == null) {
+            state.presentSince = time;
+        }
+        if (state.disconnectAlerted && time.getTime() - state.presentSince.getTime() >= REARM_DISCONNECT_MS) {
+            // Sigue en LOW: el voltaje bajo no se repite, solo la desconexión y su reconexión.
+            state.disconnectAlerted = false;
+            state.reconnectAlerted = false;
+        }
+        if (power < threshold + HYSTERESIS) {
             state.normalSince = null;
-            state.lowCount = 0;
-        } else {
-            state.lowCount = 0;
-            if (state.level == Level.DISCONNECTED) {
-                // Sigue siendo el mismo episodio hasta que el voltaje se sostenga: queda como batería baja.
-                state.level = Level.LOW;
-                if (!state.reconnectAlerted) {
-                    state.reconnectAlerted = true;
-                    callback.eventDetected(alarm(position, ALARM_POWER_RECONNECTED, power, threshold));
-                }
-            }
-            Date time = position.getFixTime();
-            if (state.normalSince == null) {
-                state.normalSince = time;
-            }
-            long normalMs = time.getTime() - state.normalSince.getTime();
-            if (state.disconnectAlerted && normalMs >= REARM_DISCONNECT_MS) {
-                // Sigue en LOW: el voltaje bajo no se repite, solo la desconexión y su reconexión.
-                state.disconnectAlerted = false;
-                state.reconnectAlerted = false;
-            }
-            if (state.level != Level.NORMAL && normalMs >= RECOVERY_MS) {
-                state.level = Level.NORMAL;
-                state.disconnectAlerted = false;
-                state.reconnectAlerted = false;
-            }
+            return;
+        }
+        if (state.normalSince == null) {
+            state.normalSince = time;
+        }
+        if (state.level != Level.NORMAL && time.getTime() - state.normalSince.getTime() >= RECOVERY_MS) {
+            state.level = Level.NORMAL;
+            state.disconnectAlerted = false;
+            state.reconnectAlerted = false;
         }
     }
 

@@ -147,6 +147,18 @@ public class VoltageEventHandlerTest extends BaseTest {
     }
 
     @Test
+    public void testWeakBatteryAfterRestart() {
+        // Explorer JDG5705 después del reinicio del despliegue (2 nov 22:48 UTC): la batería reposa en 11.97 V y
+        // nunca llega a umbral + 0.5. Antes la alarma no se armaba y estas dos desconexiones no avisaron.
+        assertEquals(
+                List.of(VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED),
+                feed(handler(device()), voltages(
+                        new double[] {0.0, 0.0, 6.863, 11.974, 11.969, 11.967, 11.973}, repeat(0.0, 7),
+                        new double[] {11.82, 11.98, 11.982, 11.975, 11.98, 3.598, 0.0})));
+    }
+
+    @Test
     public void testReconnectionUnderRearmTimeIsSameEpisode() {
         // 20 s con batería no alcanza: es el mismo vaivén.
         assertEquals(

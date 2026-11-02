@@ -1,6 +1,9 @@
 #set($subject = "TelConHN 🚨: Alarma de $device.name")
 #set($alarmKey = $event.getString('alarm'))
 #set($alarmName = $translations.get("alarm${alarmKey.substring(0, 1).toUpperCase()}${alarmKey.substring(1)}"))
+#if(!$alarmName)#set($alarmName = $alarmKey)#end
+## Alarmas de VoltageEventHandler: el voltaje medido dice qué tan grave es.
+#if($alarmKey == 'lowVoltage' || $alarmKey == 'powerDisconnected' || $alarmKey == 'powerReconnected')#set($alarmName = "$alarmName ($event.getDouble('power') V)")#end
 #set($digest = "🚨 $device.name: $alarmName")
 <!DOCTYPE html>
 <html>
