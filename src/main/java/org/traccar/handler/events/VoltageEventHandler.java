@@ -40,6 +40,10 @@ import java.util.concurrent.ConcurrentHashMap;
 // Cada alarma sale una sola vez por episodio: la batería se da por recuperada cuando pasa RECOVERY_MS
 // seguidos sobre umbral + HYSTERESIS. Antes bastaba un reporte, y un voltaje que oscila entre 11 y 12.3 V
 // (un reporte cada 10 s) repetía la alarma de voltaje bajo diez veces en media hora.
+// La desconexión se vuelve a avisar antes: basta REARM_DISCONNECT_MS con la batería puesta. Quitar la
+// batería, ponerla un par de minutos y volver a quitarla es algo que el cliente tiene que saber (2 nov:
+// Explorer JDG5705, cuatro desconexiones con reconexiones de 40 s a 2 min y una sola alarma). Un cable
+// flojo que salta en cada reporte no llega a los 30 s y sigue avisando una vez.
 @Singleton
 public class VoltageEventHandler extends BaseEventHandler {
 
@@ -51,6 +55,7 @@ public class VoltageEventHandler extends BaseEventHandler {
     // Cuánto tiene que subir sobre el umbral para dar la batería por recuperada (evita alarmas en vaivén).
     private static final double HYSTERESIS = 0.5;
     private static final long RECOVERY_MS = 10 * 60 * 1000;
+    private static final long REARM_DISCONNECT_MS = 30 * 1000;
 
     private enum Level { NORMAL, LOW, DISCONNECTED }
 
@@ -126,7 +131,13 @@ public class VoltageEventHandler extends BaseEventHandler {
             if (state.normalSince == null) {
                 state.normalSince = time;
             }
-            if (state.level != Level.NORMAL && time.getTime() - state.normalSince.getTime() >= RECOVERY_MS) {
+            long normalMs = time.getTime() - state.normalSince.getTime();
+            if (state.disconnectAlerted && normalMs >= REARM_DISCONNECT_MS) {
+                // Sigue en LOW: el voltaje bajo no se repite, solo la desconexión y su reconexión.
+                state.disconnectAlerted = false;
+                state.reconnectAlerted = false;
+            }
+            if (state.level != Level.NORMAL && normalMs >= RECOVERY_MS) {
                 state.level = Level.NORMAL;
                 state.disconnectAlerted = false;
                 state.reconnectAlerted = false;

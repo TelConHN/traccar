@@ -115,6 +115,56 @@ public class VoltageEventHandlerTest extends BaseTest {
     }
 
     @Test
+    public void testDisconnectAgainAfterShortReconnection() {
+        // Explorer JDG5705 (2 nov): quitan la batería, la ponen un minuto y la vuelven a quitar.
+        assertEquals(
+                List.of(VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED),
+                feed(handler(device()), voltages(
+                        new double[] {12.6, 0.0, 0.0}, repeat(12.1, 6), new double[] {0.0, 0.0},
+                        repeat(12.1, 6), new double[] {0.0})));
+    }
+
+    @Test
+    public void testExplorerJdg5705RealSequence() {
+        // Voltajes reales de producción, 2 nov 22:06–22:27 UTC. Con la regla anterior solo salieron
+        // lowVoltage, powerDisconnected y powerReconnected (es lo que quedó en tc_events); las
+        // desconexiones de 22:10, 22:17 y 22:26 no avisaron.
+        assertEquals(
+                List.of(VoltageEventHandler.ALARM_LOW_VOLTAGE,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED,
+                        VoltageEventHandler.ALARM_POWER_DISCONNECTED),
+                feed(handler(device()), voltages(
+                        new double[] {12.124, 9.274, 1.809}, repeat(0.0, 7),
+                        new double[] {6.28, 12.162, 12.163, 12.106, 12.125, 12.157, 12.13, 1.473}, repeat(0.0, 25),
+                        new double[] {9.82, 12.123, 12.148, 12.141, 12.139, 12.123, 12.121, 12.149, 12.138, 12.131,
+                            12.141, 12.145, 12.12, 1.313}, repeat(0.0, 16),
+                        new double[] {9.119, 12.147, 12.145, 12.144, 12.146, 12.142, 12.156, 12.15, 9.41, 4.583},
+                        repeat(0.0, 3))));
+    }
+
+    @Test
+    public void testReconnectionUnderRearmTimeIsSameEpisode() {
+        // 20 s con batería no alcanza: es el mismo vaivén.
+        assertEquals(
+                List.of(VoltageEventHandler.ALARM_POWER_DISCONNECTED, VoltageEventHandler.ALARM_POWER_RECONNECTED),
+                feed(handler(device()), voltages(
+                        new double[] {12.6, 0.0}, repeat(12.1, 3), new double[] {0.0})));
+    }
+
+    @Test
+    public void testLowVoltageNotRepeatedAfterRearm() {
+        assertEquals(
+                List.of(VoltageEventHandler.ALARM_LOW_VOLTAGE, VoltageEventHandler.ALARM_POWER_DISCONNECTED,
+                        VoltageEventHandler.ALARM_POWER_RECONNECTED),
+                feed(handler(device()), voltages(
+                        new double[] {12.6, 9.0, 1.5, 0.0}, repeat(12.1, 6), new double[] {9.0, 8.0})));
+    }
+
+    @Test
     public void testNeverArmedWithoutNormalReading() {
         // Equipos que mandan "power" en otra escala (nivel 0-6) o siempre en cero.
         assertTrue(feed(handler(device()), 0, 0, 4, 3, 0, 5).isEmpty());
