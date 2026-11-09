@@ -103,6 +103,10 @@ public class Position extends Message {
     public static final String KEY_RESULT = "result";
 
     public static final String KEY_DRIVER_UNIQUE_ID = "driverUniqueId";
+    // Códigos de los productos que lleva el vehículo, separados por coma (ver ProductHandler).
+    public static final String KEY_PRODUCTS = "products";
+    // Para las etiquetas Bluetooth: "código=segundos" de la última vez que se vio cada una.
+    public static final String KEY_PRODUCTS_SEEN = "productsSeen";
     public static final String KEY_CARD = "card";
 
     // Start with 1 not 0

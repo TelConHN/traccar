@@ -1767,6 +1767,25 @@ public final class Keys {
             List.of(KeyType.CONFIG, KeyType.DEVICE));
 
     /**
+     * Atributos de la posición donde un lector manda el código de un producto que se carga o se descarga
+     * (cada lectura lo agrega y la siguiente lo quita). Nunca driverUniqueId: esa entrada es del conductor.
+     * Por defecto el código de barras y el segundo RFID de Teltonika. Se puede poner por equipo.
+     */
+    public static final ConfigKey<String> PROCESSING_PRODUCT_ATTRIBUTES = new StringConfigKey(
+            "processing.productAttributes",
+            List.of(KeyType.CONFIG, KeyType.DEVICE),
+            "barcode,io207");
+
+    /**
+     * Segundos sin detectar una etiqueta Bluetooth de producto para darla por descargada. Se puede poner
+     * por equipo.
+     */
+    public static final ConfigKey<Long> PROCESSING_PRODUCT_TAG_TIMEOUT = new LongConfigKey(
+            "processing.productTagTimeout",
+            List.of(KeyType.CONFIG, KeyType.DEVICE),
+            300L);
+
+    /**
      * Include device attributes in the computed attribute context.
      */
     public static final ConfigKey<Boolean> PROCESSING_COMPUTED_ATTRIBUTES_DEVICE_ATTRIBUTES = new BooleanConfigKey(

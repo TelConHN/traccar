@@ -542,6 +542,13 @@ public class TeltonikaProtocolDecoder extends BaseProtocolDecoder {
                 if (id == 256 || id == 325) {
                     position.set(Position.KEY_VIN,
                             buf.readSlice(length).toString(StandardCharsets.US_ASCII));
+                } else if (id == 264) {
+                    // Lector de código de barras: llega como texto ASCII. Se guarda legible (el mismo código
+                    // que está impreso) para que coincida con el producto cargado en Ajustes → Productos.
+                    String barcode = buf.readSlice(length).toString(StandardCharsets.US_ASCII).trim();
+                    if (!barcode.isEmpty()) {
+                        position.set("barcode", barcode);
+                    }
                 } else if (id == 281) {
                     position.set(Position.KEY_DTCS,
                             buf.readSlice(length).toString(StandardCharsets.US_ASCII).replace(',', ' '));

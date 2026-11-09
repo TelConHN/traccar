@@ -36,6 +36,7 @@ import org.traccar.model.Group;
 import org.traccar.model.Maintenance;
 import org.traccar.model.Notification;
 import org.traccar.model.Position;
+import org.traccar.model.Product;
 import org.traccar.model.User;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -64,6 +65,7 @@ public class AuditResource extends BaseResource {
             "group", Group.class,
             "geofence", Geofence.class,
             "driver", Driver.class,
+            "product", Product.class,
             "calendar", Calendar.class,
             "maintenance", Maintenance.class,
             "notification", Notification.class,
@@ -365,6 +367,8 @@ public class AuditResource extends BaseResource {
             return geofence.getName();
         } else if (item instanceof Driver driver) {
             return driver.getName();
+        } else if (item instanceof Product product) {
+            return product.getName();
         } else if (item instanceof Calendar calendar) {
             return calendar.getName();
         } else if (item instanceof Maintenance maintenance) {

@@ -40,6 +40,7 @@ import org.traccar.handler.MotionHandler;
 import org.traccar.handler.OutdatedHandler;
 import org.traccar.handler.PositionForwardingHandler;
 import org.traccar.handler.PostProcessHandler;
+import org.traccar.handler.ProductHandler;
 import org.traccar.handler.SpeedLimitHandler;
 import org.traccar.handler.TimeHandler;
 import org.traccar.handler.events.AlarmEventHandler;
@@ -110,6 +111,7 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
                 ComputedAttributesHandler.Late.class,
                 DriverHandler.class,
                 CopyAttributesHandler.class,
+                ProductHandler.class,
                 EngineHoursHandler.class,
                 PositionForwardingHandler.class,
                 DatabaseHandler.class)
