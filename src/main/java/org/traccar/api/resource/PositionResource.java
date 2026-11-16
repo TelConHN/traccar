@@ -23,6 +23,7 @@ import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
 import org.traccar.model.Position;
+import org.traccar.model.User;
 import org.traccar.model.UserRestrictions;
 import org.traccar.reports.CsvExportProvider;
 import org.traccar.reports.GpxExportProvider;
@@ -101,8 +102,15 @@ public class PositionResource extends BaseResource {
                 // Historial por fechas: lo piden el recorrido (replay) y el reporte de Posiciones.
                 permissionsService.checkReport(getUserId(), HISTORY_REPORTS);
 
+                // Solo una geocerca que el usuario puede ver (oficial 6d8de5307). Los administradores ven todas,
+                // así que a ellos no se les exige el vínculo directo con la geocerca.
+                Condition geofenceCondition = new Condition.Equals("id", geofenceId);
+                if (!permissionsService.getUser(getUserId()).getAdministrator()) {
+                    geofenceCondition = new Condition.And(geofenceCondition,
+                            new Condition.Permission(User.class, getUserId(), Geofence.class));
+                }
                 Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
-                        new Columns.All(), new Condition.Equals("id", geofenceId)));
+                        new Columns.All(), geofenceCondition));
 
                 List<Position> positions;
                 try (var stream = PositionUtil.getPositionsStream(storage, deviceId, from, to)) {

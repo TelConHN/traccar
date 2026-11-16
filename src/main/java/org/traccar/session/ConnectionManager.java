@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -279,9 +280,17 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     public synchronized void sendKeepalive() {
-        for (Set<UpdateListener> userListeners : listeners.values()) {
-            for (UpdateListener listener : userListeners) {
-                listener.onKeepalive();
+        var iterator = listeners.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            var userListeners = entry.getValue();
+            if (userListeners.isEmpty()) {
+                iterator.remove();
+                removeUserDevices(entry.getKey());
+            } else {
+                for (UpdateListener listener : userListeners) {
+                    listener.onKeepalive();
+                }
             }
         }
     }
@@ -376,30 +385,38 @@ public class ConnectionManager implements BroadcastInterface {
         void onUpdateLog(LogRecord record);
     }
 
+    private void removeUserDevices(long userId) {
+        var devices = userDevices.remove(userId);
+        if (devices != null) {
+            devices.forEach(deviceId -> deviceUsers.computeIfPresent(deviceId, (id, userIds) -> {
+                userIds.remove(userId);
+                return userIds.isEmpty() ? null : userIds;
+            }));
+        }
+    }
+
     public synchronized void addListener(long userId, UpdateListener listener) throws StorageException {
         var set = listeners.get(userId);
-        if (set == null) {
-            set = new HashSet<>();
-            listeners.put(userId, set);
-
+        if (set == null || set.isEmpty()) {
+            // An empty set means the user's last connection closed and sendKeepalive has not cleaned it up
+            // yet. Reload the device list so devices linked to the user in the meantime are included.
             var devices = storage.getObjects(Device.class, new Request(
                     new Columns.Include("id"), new Condition.Permission(User.class, userId, Device.class)));
+            removeUserDevices(userId);
             userDevices.put(userId, devices.stream().map(BaseModel::getId).collect(Collectors.toSet()));
             devices.forEach(device -> deviceUsers.computeIfAbsent(device.getId(), id -> new HashSet<>()).add(userId));
+            if (set == null) {
+                set = new CopyOnWriteArraySet<>();
+                listeners.put(userId, set);
+            }
         }
         set.add(listener);
     }
 
     public synchronized void removeListener(long userId, UpdateListener listener) {
         var set = listeners.get(userId);
-        set.remove(listener);
-        if (set.isEmpty()) {
-            listeners.remove(userId);
-
-            userDevices.remove(userId).forEach(deviceId -> deviceUsers.computeIfPresent(deviceId, (x, userIds) -> {
-                userIds.remove(userId);
-                return userIds.isEmpty() ? null : userIds;
-            }));
+        if (set != null) {
+            set.remove(listener);
         }
     }
 

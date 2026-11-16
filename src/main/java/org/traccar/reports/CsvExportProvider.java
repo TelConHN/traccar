@@ -21,6 +21,7 @@ import org.traccar.helper.model.PositionUtil;
 import org.traccar.helper.model.UserUtil;
 import org.traccar.model.Geofence;
 import org.traccar.model.Position;
+import org.traccar.model.User;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 
@@ -72,8 +73,15 @@ public class CsvExportProvider {
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         dateFormat.setTimeZone(UserUtil.getTimezone(server, user));
 
+        // Solo una geocerca que el usuario puede ver (oficial 6d8de5307). Los administradores ven todas,
+        // así que a ellos no se les exige el vínculo directo con la geocerca.
+        Condition geofenceCondition = new Condition.Equals("id", geofenceId);
+        if (!user.getAdministrator()) {
+            geofenceCondition = new Condition.And(geofenceCondition,
+                    new Condition.Permission(User.class, userId, Geofence.class));
+        }
         Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
-                new Columns.All(), new Condition.Equals("id", geofenceId)));
+                new Columns.All(), geofenceCondition));
 
         var attributes = positions.stream()
                 .filter(position -> geofence == null || geofence.containsPosition(position))
