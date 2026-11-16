@@ -156,7 +156,7 @@ public class NotificationManager {
             Map<String, Map<String, Object>> deliveries = new LinkedHashMap<>();
             notifications.forEach(notification -> {
                 cacheManager.getNotificationUsers(notification.getId(), event.getDeviceId()).forEach(user -> {
-                    if (blockedUsers.contains(user.getId())) {
+                    if (blockedUsers.contains(user.getId()) || user.getDisabled()) {
                         LOGGER.info("User {} notification blocked", user.getId());
                         addDelivery(deliveries, user, null, DELIVERY_BLOCKED, null);
                         return;

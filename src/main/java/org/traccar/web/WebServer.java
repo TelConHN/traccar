@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import org.traccar.LifecycleObject;
 import org.traccar.api.CorsResponseFilter;
 import org.traccar.api.DateParameterConverterProvider;
+import org.traccar.api.MediaFilter;
 import org.traccar.api.ResourceErrorHandler;
 import org.traccar.api.StreamWriter;
 import org.traccar.api.resource.ServerResource;
@@ -164,6 +165,10 @@ public class WebServer implements LifecycleObject {
     private void initApi(ServletContextHandler servletHandler) {
         String mediaPath = config.getString(Keys.MEDIA_PATH);
         if (mediaPath != null) {
+            servletHandler.addFilter(
+                    new FilterHolder(injector.getInstance(MediaFilter.class)),
+                    "/api/media/*", EnumSet.of(DispatcherType.REQUEST));
+
             ServletHolder servletHolder = new ServletHolder(ResourceServlet.class);
             servletHolder.setInitParameter("baseResource", Path.of(mediaPath).toUri().toString());
             servletHolder.setInitParameter("dirAllowed", "false");
