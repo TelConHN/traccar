@@ -20,11 +20,11 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -120,9 +120,9 @@ public class ProgressProtocolDecoder extends BaseProtocolDecoder {
                 position.setTime(new Date(buf.readUnsignedIntLE() * 1000));
                 position.setLatitude(buf.readIntLE() * 180.0 / 0x7FFFFFFF);
                 position.setLongitude(buf.readIntLE() * 180.0 / 0x7FFFFFFF);
-                position.setSpeed(buf.readUnsignedIntLE() * 0.01);
-                position.setCourse(buf.readUnsignedShortLE() * 0.01);
-                position.setAltitude(buf.readUnsignedShortLE() * 0.01);
+                position.setSpeed(buf.readUnsignedIntLE() / 100.0);
+                position.setCourse(buf.readUnsignedShortLE() / 100.0);
+                position.setAltitude(buf.readUnsignedShortLE() / 100.0);
 
                 int satellites = buf.readUnsignedByte();
                 position.setValid(satellites >= 3);

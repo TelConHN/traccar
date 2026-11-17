@@ -19,13 +19,13 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.helper.BufferUtil;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
+import org.traccar.helper.BufferUtil;
 import org.traccar.helper.Checksum;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -65,10 +65,10 @@ public class ThinkPowerProtocolDecoder extends BaseProtocolDecoder {
         switch (type) {
             case 0x01 -> {
                 position.setValid(true);
-                position.setLatitude(BufferUtil.readSignedMagnitudeInt(buf) * 0.0000001);
-                position.setLongitude(BufferUtil.readSignedMagnitudeInt(buf) * 0.0000001);
-                position.setSpeed(UnitsConverter.knotsFromKph(buf.readUnsignedShort() * 0.1));
-                position.setCourse(buf.readUnsignedShort() * 0.01);
+                position.setLatitude(BufferUtil.readSignedMagnitudeInt(buf) / 10000000.0);
+                position.setLongitude(BufferUtil.readSignedMagnitudeInt(buf) / 10000000.0);
+                position.setSpeed(UnitsConverter.knotsFromKph(buf.readUnsignedShort() / 10.0));
+                position.setCourse(buf.readUnsignedShort() / 100.0);
             }
             case 0x02 -> position.setValid(buf.readUnsignedByte() > 0);
             case 0x03 -> buf.skipBytes(3); // geofence
@@ -80,7 +80,7 @@ public class ThinkPowerProtocolDecoder extends BaseProtocolDecoder {
                     position.addAlarm(Position.ALARM_SOS);
                 }
             }
-            case 0x12 -> position.set(Position.KEY_BATTERY, buf.readUnsignedShort() * 0.1);
+            case 0x12 -> position.set(Position.KEY_BATTERY, buf.readUnsignedShort() / 10.0);
             case 0x13 -> {
                 if (buf.readUnsignedByte() > 0) {
                     position.addAlarm(Position.ALARM_LOW_BATTERY);

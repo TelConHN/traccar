@@ -43,7 +43,6 @@ import com.nimbusds.openid.connect.sdk.UserInfoRequest;
 import com.nimbusds.openid.connect.sdk.UserInfoResponse;
 import com.nimbusds.openid.connect.sdk.claims.UserInfo;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
-import jakarta.servlet.http.HttpServletRequest;
 import org.traccar.api.security.LoginService;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
@@ -53,6 +52,7 @@ import org.traccar.helper.WebHelper;
 import org.traccar.model.User;
 import org.traccar.storage.StorageException;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -87,7 +87,7 @@ public class OpenIdProvider {
         clientId = new ClientID(config.getString(Keys.OPENID_CLIENT_ID));
         clientAuth = new ClientSecretBasic(clientId, new Secret(config.getString(Keys.OPENID_CLIENT_SECRET)));
 
-        baseUrl = URI.create(WebHelper.retrieveWebUrl(config));
+        baseUrl = URI.create(WebHelper.retrieveWebUrl(config) + "/");
         callbackUrl = URI.create(WebHelper.retrieveWebUrl(config) + "/api/session/openid/callback");
 
         if (config.hasKey(Keys.OPENID_ISSUER_URL)) {
@@ -154,7 +154,15 @@ public class OpenIdProvider {
             throws StorageException, ParseException, IOException, GeneralSecurityException {
 
         String redirectUriOverride = request.getParameter("redirect_uri");
-        URI redirectUri = redirectUriOverride != null ? URI.create(redirectUriOverride) : callbackUrl;
+        URI redirectUri;
+        if (redirectUriOverride != null) {
+            redirectUri = URI.create(redirectUriOverride);
+            if (!"org.traccar.manager".equals(redirectUri.getScheme())) {
+                throw new GeneralSecurityException("Invalid redirect URI");
+            }
+        } else {
+            redirectUri = callbackUrl;
+        }
         AuthorizationResponse response = AuthorizationResponse.parse(
                 redirectUri, URLUtils.parseParameters(queryParameters));
 
@@ -174,9 +182,10 @@ public class OpenIdProvider {
         UserInfo userInfo = getUserInfo(bearerToken);
 
         List<String> userGroups = userInfo.getStringListClaim(groupsClaimName);
-        Boolean administrator = adminGroup != null ? userGroups.contains(adminGroup) : null;
+        Boolean administrator = adminGroup != null && userGroups != null ? userGroups.contains(adminGroup) : null;
 
-        if (!(Boolean.TRUE.equals(administrator) || allowGroup == null || userGroups.contains(allowGroup))) {
+        if (!(Boolean.TRUE.equals(administrator) || allowGroup == null
+                || (userGroups != null && userGroups.contains(allowGroup)))) {
             throw new GeneralSecurityException("Your OpenID Groups do not permit access");
         }
 

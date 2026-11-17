@@ -20,16 +20,16 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.helper.BufferUtil;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BcdUtil;
 import org.traccar.helper.BitUtil;
+import org.traccar.helper.BufferUtil;
 import org.traccar.helper.Checksum;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -114,8 +114,8 @@ public class NiotProtocolDecoder extends BaseProtocolDecoder {
             buf.readUnsignedByte(); // statusB
             buf.readUnsignedByte(); // statusC
             position.set(Position.KEY_SATELLITES, buf.readUnsignedByte());
-            position.set(Position.KEY_BATTERY, buf.readUnsignedByte() * 0.1);
-            position.set(Position.KEY_POWER, buf.readUnsignedShort() * 0.1);
+            position.set(Position.KEY_BATTERY, buf.readUnsignedByte() / 10.0);
+            position.set(Position.KEY_POWER, buf.readUnsignedShort() / 10.0);
             buf.readUnsignedByte(); // speed limit
             position.setSpeed(UnitsConverter.knotsFromKph(buf.readUnsignedByte()));
             buf.readUnsignedByte(); // sensor speed

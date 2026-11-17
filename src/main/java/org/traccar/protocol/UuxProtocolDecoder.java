@@ -19,12 +19,12 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -115,7 +115,7 @@ public class UuxProtocolDecoder extends BaseProtocolDecoder {
             readInt(buf, 3); // alternative speed
 
             position.set(Position.KEY_ODOMETER, buf.readUnsignedByte() * 10000 + buf.readUnsignedByte() * 256
-                    + buf.readUnsignedByte() + buf.readUnsignedByte() * 0.1);
+                    + buf.readUnsignedByte() + buf.readUnsignedByte() / 10.0);
             position.set(Position.KEY_HOURS, buf.readUnsignedInt());
             position.set(Position.KEY_RSSI, buf.readUnsignedByte());
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 - 2019 Anton Tananaev (anton@traccar.org)
+ * Copyright 2015 - 2026 Anton Tananaev (anton@traccar.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,26 +15,38 @@
  */
 package org.traccar.api;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 public class ResourceErrorHandler implements ExceptionMapper<Exception> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceErrorHandler.class);
 
+    private static boolean isConcurrencyWrapper(Throwable throwable) {
+        return throwable instanceof CompletionException || throwable instanceof ExecutionException;
+    }
+
     @Override
     public Response toResponse(Exception exception) {
-        LOGGER.warn("API request failed", exception);
+        Throwable throwable = exception;
+        while (isConcurrencyWrapper(throwable) && throwable.getCause() != null) {
+            throwable = throwable.getCause();
+        }
+        LOGGER.warn("API request failed", throwable);
 
-        if (exception instanceof WebApplicationException webException) {
-            return Response.fromResponse(webException.getResponse())
-                    .entity(exception.getMessage())
-                    .build();
+        // Only the message goes to the client; the stack trace stays in the log (web.showStackTraces is not
+        // honored on purpose, see the 2026-08 security remediation).
+        String message = throwable.getMessage();
+        if (throwable instanceof WebApplicationException webException) {
+            return Response.fromResponse(webException.getResponse()).entity(message).build();
         } else {
-            return Response.status(Response.Status.BAD_REQUEST).entity(exception.getMessage()).build();
+            return Response.status(Response.Status.BAD_REQUEST).entity(message).build();
         }
     }
 

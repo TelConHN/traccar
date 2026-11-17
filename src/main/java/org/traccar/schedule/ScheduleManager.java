@@ -17,12 +17,11 @@ package org.traccar.schedule;
 
 import com.google.inject.Injector;
 import org.traccar.LifecycleObject;
-
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
@@ -42,7 +41,7 @@ public class ScheduleManager implements LifecycleObject {
 
     @Override
     public void start() {
-        executor = Executors.newSingleThreadScheduledExecutor();
+        executor = Executors.newScheduledThreadPool(4);
         Stream.of(
                 TaskHealthCheck.class,
                 TaskClearStatus.class,
@@ -50,6 +49,7 @@ public class ScheduleManager implements LifecycleObject {
                 TaskDeleteTemporary.class,
                 TaskReports.class,
                 TaskDeviceInactivityCheck.class,
+                TaskSessionTimeout.class,
                 TaskWebSocketKeepalive.class)
                 .forEachOrdered(taskClass -> {
                     var task = injector.getInstance(taskClass);

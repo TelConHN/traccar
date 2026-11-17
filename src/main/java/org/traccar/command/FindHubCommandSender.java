@@ -15,6 +15,10 @@
  */
 package org.traccar.command;
 
+import org.traccar.config.Keys;
+import org.traccar.model.Command;
+import org.traccar.model.Device;
+
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.client.Client;
@@ -22,13 +26,10 @@ import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.traccar.config.Keys;
-import org.traccar.model.Command;
-import org.traccar.model.Device;
-
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 @Singleton
@@ -58,7 +59,7 @@ public class FindHubCommandSender implements CommandSender {
         }
 
         String commandType = Pattern.compile("(?<=[a-z0-9])(?=[A-Z])")
-                .matcher(command.getType()).replaceAll("-").toLowerCase();
+                .matcher(command.getType()).replaceAll("-").toLowerCase(Locale.ROOT);
 
         WebTarget target = client.target(url)
                 .path("devices")

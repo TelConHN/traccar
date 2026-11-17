@@ -17,12 +17,12 @@ package org.traccar.helper;
 
 import io.netty.handler.codec.http.HttpHeaderNames;
 import org.traccar.model.User;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Date;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Date;
 
 public final class SessionHelper {
 
@@ -30,8 +30,7 @@ public final class SessionHelper {
     public static final String EXPIRATION_KEY = "expiration";
     public static final String ORIGIN_KEY = "origin";
 
-    private SessionHelper() {
-    }
+    private SessionHelper() {}
 
     public static void userLogin(LogAction actionLogger, HttpServletRequest request, User user, Date expiration) {
         request.getSession().invalidate();

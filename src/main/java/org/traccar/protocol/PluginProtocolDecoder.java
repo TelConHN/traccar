@@ -17,7 +17,6 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
@@ -25,6 +24,7 @@ import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.regex.Pattern;
@@ -118,8 +118,8 @@ public class PluginProtocolDecoder extends BaseProtocolDecoder {
             position.set(Position.PREFIX_TEMP + 2, parser.nextDouble());
             position.set(Position.KEY_RPM, parser.nextInt());
             position.set(Position.KEY_OBD_SPEED, parser.nextInt());
-            position.set(Position.KEY_THROTTLE, parser.nextInt() * 0.1);
-            position.set(Position.KEY_POWER, parser.nextInt() * 0.1);
+            position.set(Position.KEY_THROTTLE, parser.nextInt() / 10.0);
+            position.set(Position.KEY_POWER, parser.nextInt() / 10.0);
         }
 
         if (parser.hasNext()) {

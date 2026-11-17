@@ -17,12 +17,12 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.Protocol;
 import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.regex.Pattern;
@@ -162,8 +162,7 @@ public class Ivt401ProtocolDecoder extends BaseProtocolDecoder {
                 case 1 -> position.addAlarm(Position.ALARM_ACCELERATION);
                 case 2 -> position.addAlarm(Position.ALARM_BRAKING);
                 case 3 -> position.addAlarm(Position.ALARM_CORNERING);
-                default -> {
-                }
+                default -> {}
             }
             position.addAlarm(parser.nextInt() == 1 ? Position.ALARM_LOW_BATTERY : null);
             position.addAlarm(parser.nextInt() == 1 ? Position.ALARM_POWER_CUT : null);

@@ -19,12 +19,11 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.helper.DataConverter;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.config.Keys;
 import org.traccar.helper.BitUtil;
+import org.traccar.helper.DataConverter;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
@@ -32,6 +31,7 @@ import org.traccar.model.CellTower;
 import org.traccar.model.Network;
 import org.traccar.model.Position;
 import org.traccar.model.WifiAccessPoint;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.regex.Pattern;
@@ -156,6 +156,16 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
             .text(")")
             .compile();
 
+    private static final Pattern PATTERN_HANDSHAKE = new PatternBuilder()
+            .text("(")
+            .expression("(.{12})")               // device id
+            .text("BP00")
+            .number("(?:d{15})?")                // imei
+            .text("HSOP")
+            .number("(xx)")                      // battery level
+            .text(")")
+            .compile();
+
     private String decodeAlarm(int value) {
         return switch (value) {
             case 1 -> Position.ALARM_ACCIDENT;
@@ -228,12 +238,12 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
 
         int battery = parser.nextInt(0);
         if (battery != 65535) {
-            position.set(Position.KEY_BATTERY, battery * 0.01);
+            position.set(Position.KEY_BATTERY, battery / 100.0);
         }
 
         int power = parser.nextInt(0);
         if (power != 65535) {
-            position.set(Position.KEY_POWER, power * 0.1);
+            position.set(Position.KEY_POWER, power / 10.0);
         }
 
         return position;
@@ -380,6 +390,27 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
         return position;
     }
 
+    private Position decodeHandshake(Channel channel, SocketAddress remoteAddress, String sentence) {
+        Parser parser = new Parser(PATTERN_HANDSHAKE, sentence);
+        if (!parser.matches()) {
+            return null;
+        }
+
+        DeviceSession deviceSession = getDeviceSession(channel, remoteAddress, parser.next());
+        if (deviceSession == null) {
+            return null;
+        }
+
+        Position position = new Position(getProtocolName());
+        position.setDeviceId(deviceSession.getDeviceId());
+
+        getLastLocation(position, null);
+
+        position.set(Position.KEY_BATTERY_LEVEL, parser.nextHexInt());
+
+        return position;
+    }
+
     private Position decodeBms(Channel channel, SocketAddress remoteAddress, String sentence) {
         String id = sentence.substring(1, 13);
         DeviceSession deviceSession = getDeviceSession(channel, remoteAddress, id);
@@ -406,14 +437,14 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
             for (int i = 1; i <= 24; i++) {
                 int voltage = buf.readUnsignedShortLE();
                 if (i <= batteryCount) {
-                    position.set("battery" + i, voltage * 0.001);
+                    position.set("battery" + i, voltage / 1000.0);
                 }
             }
 
             position.set(Position.KEY_CHARGE, buf.readUnsignedByte() == 0);
-            position.set("current", buf.readUnsignedShortLE() * 0.1);
-            position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() * 0.01);
-            position.set(Position.KEY_BATTERY_LEVEL, buf.readUnsignedByte());
+            position.set("current", buf.readUnsignedShortLE() / 10.0);
+            position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() / 100.0);
+            position.set(Position.KEY_ENERGY_LEVEL, buf.readUnsignedByte());
             position.set("batteryOverheat", buf.readUnsignedByte() > 0);
             position.set("chargeProtection", buf.readUnsignedByte() > 0);
             position.set("dischargeProtection", buf.readUnsignedByte() > 0);
@@ -434,7 +465,7 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
                 }
             }
 
-            position.set("calibrationCapacity", buf.readUnsignedShortLE() * 0.01);
+            position.set("calibrationCapacity", buf.readUnsignedShortLE() / 100.0);
             position.set("dischargeCapacity", buf.readUnsignedIntLE());
 
         } else {
@@ -446,15 +477,15 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
                 ByteBuf buf = Unpooled.wrappedBuffer(DataConverter.parseHex(pair[1]));
                 switch (key) {
                     case 0x90 -> {
-                        position.set("cumulativeVoltage", buf.readUnsignedShortLE() * 0.1);
-                        position.set("gatherVoltage", buf.readUnsignedShortLE() * 0.1);
-                        position.set("current", (buf.readUnsignedShortLE() - 30000) * 0.1);
-                        position.set("soc", buf.readUnsignedShortLE() * 0.1);
+                        position.set("cumulativeVoltage", buf.readUnsignedShortLE() / 10.0);
+                        position.set("gatherVoltage", buf.readUnsignedShortLE() / 10.0);
+                        position.set("current", (buf.readUnsignedShortLE() - 30000) / 10.0);
+                        position.set(Position.KEY_ENERGY_LEVEL, buf.readUnsignedShortLE() / 10.0);
                     }
                     case 0x91 -> {
-                        position.set("maxCellVoltage", buf.readUnsignedShortLE() * 0.001);
+                        position.set("maxCellVoltage", buf.readUnsignedShortLE() / 1000.0);
                         position.set("maxCellVoltageCount", buf.readUnsignedByte());
-                        position.set("minCellVoltage", buf.readUnsignedShortLE() * 0.001);
+                        position.set("minCellVoltage", buf.readUnsignedShortLE() / 1000.0);
                         position.set("minCellVoltageCount", buf.readUnsignedByte());
                     }
                     case 0x92 -> {
@@ -489,7 +520,6 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
             String type = sentence.substring(13, 17);
             if (type.equals("BP00")) {
                 channel.writeAndFlush(new NetworkMessage("(" + id + "AP01HSO)", remoteAddress));
-                return null;
             } else if (type.equals("BP05")) {
                 channel.writeAndFlush(new NetworkMessage("(" + id + "AP05)", remoteAddress));
             }
@@ -509,6 +539,8 @@ public class Tk103ProtocolDecoder extends BaseProtocolDecoder {
             return decodeVin(channel, remoteAddress, sentence);
         } else if (sentence.contains("BS50") || sentence.contains("BS51")) {
             return decodeBms(channel, remoteAddress, sentence);
+        } else if (sentence.contains("BP00")) {
+            return decodeHandshake(channel, remoteAddress, sentence);
         }
 
         Parser parser = new Parser(PATTERN, sentence);

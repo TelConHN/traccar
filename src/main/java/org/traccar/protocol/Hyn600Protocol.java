@@ -16,11 +16,12 @@
 package org.traccar.protocol;
 
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import jakarta.inject.Inject;
 import org.traccar.BaseProtocol;
 import org.traccar.PipelineBuilder;
 import org.traccar.TrackerServer;
 import org.traccar.config.Config;
+
+import jakarta.inject.Inject;
 
 public class Hyn600Protocol extends BaseProtocol {
 
@@ -29,7 +30,7 @@ public class Hyn600Protocol extends BaseProtocol {
         addServer(new TrackerServer(config, getName(), false) {
             @Override
             protected void addProtocolHandlers(PipelineBuilder pipeline, Config config) {
-                pipeline.addLast(new LengthFieldBasedFrameDecoder(1024, 5, 2));
+                pipeline.addLast(new LengthFieldBasedFrameDecoder(MAX_FRAME_LENGTH, 5, 2, -7, 0));
                 pipeline.addLast(new Hyn600ProtocolDecoder(Hyn600Protocol.this));
             }
         });

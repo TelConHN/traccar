@@ -25,14 +25,14 @@
       <p style="font-size: 16px;">El sistema de rastreo de <strong>TelConHN</strong> informa que se ha identificado un <strong>cambio de conductor</strong> en el siguiente dispositivo:</p>
 
       <div style="background-color: #f5faff; border: 1px solid #eee; border-radius: 5px; padding: 20px; margin-top: 20px; font-size: 15px;">
-        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $device.name</p>
-        <p style="margin: 0 0 10px 0;"><strong>👤 Conductor:</strong> $driverName</p>
+        <p style="margin: 0 0 10px 0;"><strong>📱 Dispositivo:</strong> $esc.html($device.name)</p>
+        <p style="margin: 0 0 10px 0;"><strong>👤 Conductor:</strong> $esc.html($driverName)</p>
         <p style="margin: 0 0 10px 0;"><strong>⏰ Hora:</strong> $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)</p>
         
         <p style="margin: 0;"><strong>📍 Ubicación:</strong> 
           <a href="$webUrl/event/$event.id" style="color: #3498db; text-decoration: none; font-weight: bold;">
             #{if}($position.address)
-              $position.address
+              $esc.html($position.address)
             #{else}
               $position.latitude&deg;, $position.longitude&deg;
             #{end}

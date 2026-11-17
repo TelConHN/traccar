@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 Anton Tananaev (anton@traccar.org)
+ * Copyright 2023 - 2026 Anton Tananaev (anton@traccar.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.concurrent.CompletableFuture;
 
 @Singleton
 public class NotificatorCommand extends Notificator {
@@ -47,10 +48,10 @@ public class NotificatorCommand extends Notificator {
     }
 
     @Override
-    public void send(Notification notification, User user, Event event, Position position) throws MessageException {
+    public CompletableFuture<Void> sendAsync(Notification notification, User user, Event event, Position position) {
 
         if (notification == null || notification.getCommandId() <= 0) {
-            throw new MessageException("Saved command not provided");
+            return CompletableFuture.failedFuture(new MessageException("Saved command not provided"));
         }
 
         Command command;
@@ -58,10 +59,10 @@ public class NotificatorCommand extends Notificator {
             command = storage.getObject(Command.class, new Request(
                     new Columns.All(), new Condition.Equals("id", notification.getCommandId())));
         } catch (Exception e) {
-            throw new MessageException(e);
+            return CompletableFuture.failedFuture(e);
         }
         if (command == null) {
-            throw new MessageException("Saved command not found");
+            return CompletableFuture.failedFuture(new MessageException("Saved command not found"));
         }
         command.setDeviceId(event.getDeviceId());
         // Nadie lo manda a mano, así que antes no quedaba en auditoría.
@@ -74,8 +75,9 @@ public class NotificatorCommand extends Notificator {
         } catch (Exception e) {
             actionLogger.automaticCommand(
                     user.getId(), notification, event, command, LogAction.COMMAND_FAILED, 0, e.getMessage());
-            throw new MessageException(e);
+            return CompletableFuture.failedFuture(new MessageException(e));
         }
+        return CompletableFuture.completedFuture(null);
     }
 
 }

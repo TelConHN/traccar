@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 - 2022 Anton Tananaev (anton@traccar.org)
+ * Copyright 2017 - 2026 Anton Tananaev (anton@traccar.org)
  * Copyright 2017 - 2018 Andrey Kunitsyn (andrey@traccar.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,14 +16,14 @@
  */
 package org.traccar.api;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.core.Context;
 import org.traccar.api.security.ClientRestrictions;
 import org.traccar.api.security.ServiceAccountUser;
-import org.traccar.model.ObjectOperation;
 import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
+import org.traccar.model.Device;
 import org.traccar.model.Group;
+import org.traccar.model.GroupedModel;
+import org.traccar.model.ObjectOperation;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
 import org.traccar.session.ConnectionManager;
@@ -35,13 +35,17 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public abstract class BaseObjectResource<T extends BaseModel> extends BaseResource {
 
@@ -83,6 +87,10 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
             ClientRestrictions.keepProtected(entity, null);
         }
 
+        if (entity instanceof Group group) {
+            checkGroupHierarchy(group, true);
+        }
+
         entity.setId(storage.addObject(entity, new Request(new Columns.Exclude("id"))));
         actionLogger.create(request, getUserId(), entity);
 
@@ -91,6 +99,10 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
             cacheManager.invalidatePermission(true, User.class, getUserId(), baseClass, entity.getId(), true);
             connectionManager.invalidatePermission(true, User.class, getUserId(), baseClass, entity.getId(), true);
             actionLogger.link(request, getUserId(), User.class, getUserId(), baseClass, entity.getId());
+        }
+        // A device created inside a group is visible right away to the users of that group.
+        if (entity instanceof Device device && device.getGroupId() > 0) {
+            connectionManager.refreshAllUserDevices();
         }
 
         return Response.ok(entity).build();
@@ -115,20 +127,13 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
             permissionsService.checkUserUpdate(getUserId(), before, after);
             skipReadonly = permissionsService.getUser(getUserId())
                     .compare(after, "notificationTokens", "termsAccepted");
-        } else if (entity instanceof Group group) {
-            long parentId = group.getGroupId();
-            int depth = Storage.MAX_GROUP_DEPTH;
-            while (parentId > 0 && depth-- > 0) {
-                if (parentId == group.getId()) {
-                    throw new IllegalArgumentException("Cycle in group hierarchy");
-                }
-                Group parent = storage.getObject(Group.class, new Request(
-                        new Columns.Include("groupId"), new Condition.Equals("id", parentId)));
-                parentId = parent != null ? parent.getGroupId() : 0;
-            }
         }
 
         permissionsService.checkEdit(getUserId(), entity, false, skipReadonly);
+
+        if (entity instanceof Group group) {
+            checkGroupHierarchy(group, false);
+        }
 
         storage.updateObject(entity, new Request(
                 new Columns.Exclude("id"),
@@ -142,8 +147,34 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         }
         cacheManager.invalidateObject(true, entity.getClass(), entity.getId(), ObjectOperation.UPDATE);
         actionLogger.edit(request, getUserId(), stored, entity);
+        // Moving a device or a group to another group changes which devices users see through groups.
+        if ((entity instanceof Device || entity instanceof Group)
+                && stored instanceof GroupedModel before && entity instanceof GroupedModel after
+                && before.getGroupId() != after.getGroupId()) {
+            connectionManager.refreshAllUserDevices();
+        }
 
         return Response.ok(entity).build();
+    }
+
+    void checkGroupHierarchy(Group group, boolean addition) throws StorageException {
+        if (group.getGroupId() > 0) {
+            Map<Long, Long> parents;
+            try (var groups = storage.getObjectsStream(
+                    Group.class, new Request(new Columns.Include("id", "groupId")))) {
+                parents = groups.collect(Collectors.toMap(Group::getId, Group::getGroupId));
+            }
+            parents.put(addition ? 0L : group.getId(), group.getGroupId());
+            for (long parentId : parents.values()) {
+                int depth = 1;
+                while (parentId > 0) {
+                    if (++depth > Storage.MAX_GROUP_DEPTH) {
+                        throw new IllegalArgumentException("Maximum group depth exceeded");
+                    }
+                    parentId = parents.getOrDefault(parentId, 0L);
+                }
+            }
+        }
     }
 
     @Path("{id}")
@@ -158,6 +189,9 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         cacheManager.invalidateObject(true, baseClass, id, ObjectOperation.DELETE);
 
         actionLogger.remove(request, getUserId(), baseClass, id, stored);
+        if (baseClass == Group.class) {
+            connectionManager.refreshAllUserDevices();
+        }
 
         return Response.noContent().build();
     }

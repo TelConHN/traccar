@@ -20,13 +20,13 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.Date;
@@ -124,16 +124,16 @@ public class FlexibleReportProtocolDecoder extends BaseProtocolDecoder {
                 buf.readUnsignedShort(); // gps accuracy
             }
             if (BitUtil.check(mask, 6)) {
-                position.set(Position.KEY_POWER, buf.readUnsignedShort() * 0.001);
+                position.set(Position.KEY_POWER, buf.readUnsignedShort() / 1000.0);
             }
             if (BitUtil.check(mask, 7)) {
-                position.set(Position.KEY_BATTERY, buf.readUnsignedShort() * 0.001);
+                position.set(Position.KEY_BATTERY, buf.readUnsignedShort() / 1000.0);
             }
             if (BitUtil.check(mask, 8)) {
-                position.set("auxPower", buf.readUnsignedShort() * 0.001);
+                position.set("auxPower", buf.readUnsignedShort() / 1000.0);
             }
             if (BitUtil.check(mask, 9)) {
-                position.set("solarPower", buf.readUnsignedShort() * 0.001);
+                position.set("solarPower", buf.readUnsignedShort() / 1000.0);
             }
             if (BitUtil.check(mask, 10)) {
                 int cellService = buf.readUnsignedByte();
@@ -156,7 +156,7 @@ public class FlexibleReportProtocolDecoder extends BaseProtocolDecoder {
                 position.set(Position.KEY_ODOMETER, buf.readUnsignedInt() * 1000);
             }
             if (BitUtil.check(mask, 15)) {
-                position.set(Position.PREFIX_TEMP + 1, buf.readUnsignedShort() * 0.01);
+                position.set(Position.PREFIX_TEMP + 1, buf.readUnsignedShort() / 100.0);
             }
 
             return position;

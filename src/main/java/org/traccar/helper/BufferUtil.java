@@ -16,16 +16,15 @@
  */
 package org.traccar.helper;
 
-import java.nio.charset.StandardCharsets;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 
+import java.nio.charset.StandardCharsets;
+
 public final class BufferUtil {
 
-    private BufferUtil() {
-    }
+    private BufferUtil() {}
 
     public static int readSignedMagnitudeInt(ByteBuf buffer) {
         long value = buffer.readUnsignedInt();
@@ -85,6 +84,15 @@ public final class BufferUtil {
 
     public static String readString(ByteBuf buf, int length) {
         return buf.readCharSequence(length, StandardCharsets.US_ASCII).toString();
+    }
+
+    public static String readDecimalDigits(ByteBuf buf, int byteCount) {
+        StringBuilder builder = new StringBuilder(byteCount * 2);
+        for (int i = 0; i < byteCount; i++) {
+            int b = buf.readUnsignedByte();
+            builder.append(b / 10).append(b % 10);
+        }
+        return builder.toString();
     }
 
 }

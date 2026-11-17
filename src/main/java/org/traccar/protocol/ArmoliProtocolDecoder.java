@@ -17,7 +17,6 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.ObdDecoder;
@@ -25,6 +24,7 @@ import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.regex.Pattern;
@@ -118,7 +118,7 @@ public class ArmoliProtocolDecoder extends BaseProtocolDecoder {
         position.set(Position.KEY_ODOMETER, parser.nextHexInt());
 
         if (parser.hasNext()) {
-            position.set(Position.KEY_HDOP, parser.nextInt() * 0.1);
+            position.set(Position.KEY_HDOP, parser.nextInt() / 10.0);
         }
         if (parser.hasNext()) {
             position.set("alarms", parser.next());
@@ -127,10 +127,10 @@ public class ArmoliProtocolDecoder extends BaseProtocolDecoder {
             position.set(Position.KEY_G_SENSOR, parser.next());
         }
         if (parser.hasNext()) {
-            position.set(Position.KEY_POWER, parser.nextHexInt() * 0.01);
+            position.set(Position.KEY_POWER, parser.nextHexInt() / 100.0);
         }
         if (parser.hasNext()) {
-            position.set(Position.KEY_BATTERY, parser.nextHexInt() * 0.01);
+            position.set(Position.KEY_BATTERY, parser.nextHexInt() / 100.0);
         }
         if (parser.hasNext()) {
             position.set(Position.KEY_DRIVER_UNIQUE_ID, parser.next());

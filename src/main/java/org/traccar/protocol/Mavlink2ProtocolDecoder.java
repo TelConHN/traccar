@@ -18,10 +18,10 @@ package org.traccar.protocol;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.Protocol;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.Date;
@@ -67,10 +67,10 @@ public class Mavlink2ProtocolDecoder extends BaseProtocolDecoder {
             position.setAltitude(buf.readIntLE() / 1000.0);
             position.set("relativeAltitude", buf.readIntLE() / 1000.0);
 
-            int groundSpeedX = buf.readShortLE();
-            int groundSpeedY = buf.readShortLE();
+            long groundSpeedX = buf.readShortLE();
+            long groundSpeedY = buf.readShortLE();
             buf.readShortLE(); // ground speed z
-            double speed = Math.sqrt(Math.pow(groundSpeedX, 2) + Math.pow(groundSpeedY, 2));
+            double speed = Math.sqrt(groundSpeedX * groundSpeedX + groundSpeedY * groundSpeedY);
             position.setSpeed(UnitsConverter.knotsFromCps(speed));
 
             position.setCourse(buf.readUnsignedShortLE() / 100.0);

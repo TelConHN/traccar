@@ -17,11 +17,11 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.Protocol;
 import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.regex.Pattern;
@@ -89,8 +89,8 @@ public class EnvotechProtocolDecoder extends BaseProtocolDecoder {
         position.setDeviceTime(parser.nextDateTime(Parser.DateTimeFormat.DMY_HMS));
 
         position.set(Position.KEY_RSSI, parser.nextInt());
-        position.set(Position.KEY_POWER, parser.nextInt() * 0.01);
-        position.set(Position.KEY_BATTERY, parser.nextInt() * 0.01);
+        position.set(Position.KEY_POWER, parser.nextInt() / 100.0);
+        position.set(Position.KEY_BATTERY, parser.nextInt() / 100.0);
         position.set(Position.KEY_INPUT, parser.nextHexInt());
         position.set(Position.PREFIX_OUT, parser.nextHexInt());
         position.set(Position.KEY_FUEL, parser.nextHexInt());

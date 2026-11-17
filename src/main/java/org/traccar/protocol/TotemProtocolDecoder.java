@@ -17,7 +17,6 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
@@ -29,8 +28,10 @@ import org.traccar.helper.UnitsConverter;
 import org.traccar.model.CellTower;
 import org.traccar.model.Network;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 public class TotemProtocolDecoder extends BaseProtocolDecoder {
@@ -270,9 +271,9 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         DateBuilder dateBuilder = new DateBuilder();
         int year = 0, month = 0, day = 0;
         if (pattern == PATTERN2) {
-            day   = parser.nextInt(0);
+            day = parser.nextInt(0);
             month = parser.nextInt(0);
-            year  = parser.nextInt(0);
+            year = parser.nextInt(0);
         }
         dateBuilder.setTime(parser.nextInt(0), parser.nextInt(0), parser.nextInt(0));
 
@@ -283,9 +284,9 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         position.setCourse(parser.nextDouble(0));
 
         if (pattern == PATTERN1) {
-            day   = parser.nextInt(0);
+            day = parser.nextInt(0);
             month = parser.nextInt(0);
-            year  = parser.nextInt(0);
+            year = parser.nextInt(0);
         }
         if (year == 0) {
             return null; // ignore invalid data
@@ -311,7 +312,7 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
             position.set(Position.PREFIX_IN + 2, BitUtil.check(io, 7));
             position.set(Position.PREFIX_OUT + 1, BitUtil.check(io, 8));
             position.set(Position.PREFIX_OUT + 2, BitUtil.check(io, 9));
-            position.set(Position.KEY_BATTERY, parser.nextDouble(0) * 0.01);
+            position.set(Position.KEY_BATTERY, parser.nextDouble(0) / 100.0);
         } else {
             position.set(Position.KEY_ANTENNA, BitUtil.check(io, 0));
             position.set(Position.KEY_CHARGE, BitUtil.check(io, 1));
@@ -321,7 +322,7 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
             for (int i = 1; i <= 4; i++) {
                 position.set(Position.PREFIX_OUT + i, BitUtil.check(io, 7 + i));
             }
-            position.set(Position.KEY_BATTERY, parser.nextDouble(0) * 0.1);
+            position.set(Position.KEY_BATTERY, parser.nextDouble(0) / 10.0);
         }
 
         position.set(Position.KEY_POWER, parser.nextDouble(0));
@@ -361,7 +362,7 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         position.setTime(parser.nextDateTime(Parser.DateTimeFormat.DMY_HMS));
 
         position.set(Position.PREFIX_IO + 1, parser.next());
-        position.set(Position.KEY_BATTERY, parser.nextDouble(0) * 0.1);
+        position.set(Position.KEY_BATTERY, parser.nextDouble(0) / 10.0);
         position.set(Position.KEY_POWER, parser.nextDouble(0));
         position.set(Position.PREFIX_ADC + 1, parser.next());
         position.set(Position.PREFIX_ADC + 2, parser.next());
@@ -429,11 +430,11 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         position.setTime(parser.nextDateTime());
 
         if (parser.hasNext(2)) {
-            position.set(Position.KEY_BATTERY, parser.nextDouble() * 0.1);
+            position.set(Position.KEY_BATTERY, parser.nextDouble() / 10.0);
             position.set(Position.KEY_POWER, parser.nextDouble());
         }
         if (parser.hasNext()) {
-            position.set(Position.KEY_BATTERY, parser.nextDouble() * 0.01);
+            position.set(Position.KEY_BATTERY, parser.nextDouble() / 100.0);
         }
 
         position.set(Position.PREFIX_ADC + 1, parser.next());
@@ -522,7 +523,7 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         position.set(Position.KEY_ODOMETER, parser.nextLong());
         position.set(Position.KEY_FUEL_USED, parser.nextInt());
         position.set(Position.KEY_FUEL_CONSUMPTION, parser.nextInt());
-        position.set(Position.KEY_POWER, parser.nextInt() * 0.001);
+        position.set(Position.KEY_POWER, parser.nextInt() / 1000.0);
         position.set(Position.KEY_RPM, parser.nextInt());
         position.set(Position.KEY_OBD_SPEED, parser.nextInt());
         parser.nextInt(); // intake flow
@@ -559,7 +560,7 @@ public class TotemProtocolDecoder extends BaseProtocolDecoder {
         if (channel != null) {
             if (sentence.charAt(2) == '0') {
                 String response = "$$0014AA" + sentence.substring(sentence.length() - 6, sentence.length() - 2);
-                response += String.format("%02X", Checksum.xor(response)).toUpperCase();
+                response += String.format("%02X", Checksum.xor(response)).toUpperCase(Locale.ROOT);
                 channel.writeAndFlush(new NetworkMessage(response, remoteAddress));
             } else {
                 channel.writeAndFlush(new NetworkMessage("ACK OK\r\n", remoteAddress));

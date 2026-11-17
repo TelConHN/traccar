@@ -20,13 +20,13 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -55,7 +55,8 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
     private void sendResponse(Channel channel, int type, ByteBuf content) {
         if (channel != null) {
             ByteBuf response = Unpooled.buffer();
-            response.writeByte(0x02); response.writeByte(0x55); // header
+            response.writeByte(0x02); // header
+            response.writeByte(0x55); // header
             response.writeByte(type);
             response.writeShortLE(content != null ? content.readableBytes() : 0);
             if (content != null) {
@@ -93,8 +94,8 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
                     .setSecond((int) (time >> 26) & 0x3F)
                     .getDate());
 
-            position.setLongitude(buf.readIntLE() * 0.0000001);
-            position.setLatitude(buf.readIntLE() * 0.0000001);
+            position.setLongitude(buf.readIntLE() / 10000000.0);
+            position.setLatitude(buf.readIntLE() / 10000000.0);
             position.setSpeed(UnitsConverter.knotsFromCps(buf.readUnsignedShortLE()));
             position.setCourse(buf.readUnsignedByte() * 2);
             position.setAltitude(buf.readShortLE());
@@ -121,7 +122,7 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
 
             buf.skipBytes(8); // device id
 
-            position.set(Position.KEY_PDOP, buf.readUnsignedShortLE() * 0.01);
+            position.set(Position.KEY_PDOP, buf.readUnsignedShortLE() / 100.0);
 
             buf.skipBytes(2); // reserved
 
@@ -165,8 +166,8 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
                 if (fieldId == 0) {
 
                     position.setFixTime(new Date(1356998400000L + buf.readUnsignedIntLE() * 1000));
-                    position.setLatitude(buf.readIntLE() * 0.0000001);
-                    position.setLongitude(buf.readIntLE() * 0.0000001);
+                    position.setLatitude(buf.readIntLE() / 10000000.0);
+                    position.setLongitude(buf.readIntLE() / 10000000.0);
                     position.setAltitude(buf.readShortLE());
                     position.setSpeed(UnitsConverter.knotsFromCps(buf.readUnsignedShortLE()));
 
@@ -174,7 +175,7 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
 
                     position.setCourse(buf.readUnsignedByte() * 2);
 
-                    position.set(Position.KEY_PDOP, buf.readUnsignedByte() * 0.1);
+                    position.set(Position.KEY_PDOP, buf.readUnsignedByte() / 10.0);
 
                     position.setAccuracy(buf.readUnsignedByte());
                     position.setValid(buf.readUnsignedByte() != 0);
@@ -216,11 +217,11 @@ public class DmtProtocolDecoder extends BaseProtocolDecoder {
                     while (buf.readerIndex() < fieldEnd) {
                         int number = buf.readUnsignedByte();
                         switch (number) {
-                            case 1 -> position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() * 0.001);
-                            case 2 -> position.set(Position.KEY_POWER, buf.readUnsignedShortLE() * 0.01);
-                            case 3 -> position.set(Position.KEY_DEVICE_TEMP, buf.readShortLE() * 0.01);
+                            case 1 -> position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() / 1000.0);
+                            case 2 -> position.set(Position.KEY_POWER, buf.readUnsignedShortLE() / 100.0);
+                            case 3 -> position.set(Position.KEY_DEVICE_TEMP, buf.readShortLE() / 100.0);
                             case 4 -> position.set(Position.KEY_RSSI, buf.readUnsignedShortLE());
-                            case 5 -> position.set("solarPower", buf.readUnsignedShortLE() * 0.001);
+                            case 5 -> position.set("solarPower", buf.readUnsignedShortLE() / 1000.0);
                             default -> position.set(Position.PREFIX_IO + number, buf.readUnsignedShortLE());
                         }
                     }

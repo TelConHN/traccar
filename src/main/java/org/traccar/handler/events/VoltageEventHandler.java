@@ -15,16 +15,15 @@
  */
 package org.traccar.handler.events;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.traccar.config.Keys;
 import org.traccar.helper.model.AttributeUtil;
-import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.Position;
 import org.traccar.session.cache.CacheManager;
 
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 // Explorer JDG5705, cuatro desconexiones con reconexiones de 40 s a 2 min y una sola alarma). Un cable
 // flojo que salta en cada reporte no llega a los 30 s y sigue avisando una vez.
 @Singleton
-public class VoltageEventHandler extends BaseEventHandler {
+public class VoltageEventHandler extends BasePositionEventHandler {
 
     public static final String ALARM_LOW_VOLTAGE = "lowVoltage";
     public static final String ALARM_POWER_DISCONNECTED = "powerDisconnected";
@@ -75,19 +74,17 @@ public class VoltageEventHandler extends BaseEventHandler {
         private boolean reconnectAlerted;
     }
 
-    private final CacheManager cacheManager;
     private final Map<Long, State> states = new ConcurrentHashMap<>();
 
     @Inject
     public VoltageEventHandler(CacheManager cacheManager) {
-        this.cacheManager = cacheManager;
+        super(cacheManager);
     }
 
     @Override
-    public void onPosition(Position position, Callback callback) {
+    protected void onPosition(Position position, Position lastPosition, Callback callback) {
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
-        if (device == null || !PositionUtil.isLatest(cacheManager, position)
-                || !position.hasAttribute(Position.KEY_POWER)) {
+        if (device == null || !position.hasAttribute(Position.KEY_POWER)) {
             return;
         }
         double threshold = AttributeUtil.lookup(

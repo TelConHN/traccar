@@ -24,6 +24,7 @@ import org.traccar.forward.EventData;
 import org.traccar.forward.EventForwarder;
 import org.traccar.geocoder.Geocoder;
 import org.traccar.helper.DateUtil;
+import org.traccar.model.AttributeMap;
 import org.traccar.model.Calendar;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
@@ -31,7 +32,6 @@ import org.traccar.model.Geofence;
 import org.traccar.model.Maintenance;
 import org.traccar.model.Position;
 import org.traccar.model.User;
-import org.traccar.notification.MessageException;
 import org.traccar.notification.NotificatorManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
@@ -45,12 +45,16 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 
 @Singleton
 public class NotificationManager {
@@ -64,6 +68,9 @@ public class NotificationManager {
     private static final String DELIVERY_BLOCKED = "blocked";
     private static final String DELIVERY_NO_PHONE = "noPhone";
     private static final String DELIVERY_NO_APP = "noApp";
+    private static final String DELIVERY_PENDING = "pending";
+    // Los envíos van en segundo plano; el registro se guarda cuando terminan todos o al pasar este tiempo.
+    private static final long DELIVERY_TIMEOUT_SECONDS = 60;
     // tc_events.attributes es VARCHAR(4000) y el evento ya trae lo suyo.
     private static final int MAX_DELIVERIES = 20;
     private static final int MAX_ERROR_LENGTH = 80;
@@ -153,7 +160,8 @@ public class NotificationManager {
             }
 
             boolean skipAdministrators = geofenceSkipsAdministrators(event);
-            Map<String, Map<String, Object>> deliveries = new LinkedHashMap<>();
+            Map<String, Map<String, Object>> deliveries = Collections.synchronizedMap(new LinkedHashMap<>());
+            List<CompletableFuture<Void>> sending = new ArrayList<>();
             notifications.forEach(notification -> {
                 cacheManager.getNotificationUsers(notification.getId(), event.getDeviceId()).forEach(user -> {
                     if (blockedUsers.contains(user.getId()) || user.getDisabled()) {
@@ -170,22 +178,37 @@ public class NotificationManager {
                             addDelivery(deliveries, user, notificator, skipped, null);
                             continue;
                         }
+                        CompletableFuture<Void> future;
                         try {
-                            notificatorManager.getNotificator(notificator).send(notification, user, event, position);
-                            addDelivery(deliveries, user, notificator, DELIVERY_SENT, null);
-                        } catch (MessageException exception) {
-                            LOGGER.warn("Notification failed", exception);
-                            addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
+                            future = notificatorManager.getNotificator(notificator)
+                                    .sendAsync(notification, user, event, position);
                         } catch (RuntimeException exception) {
                             // Canal no habilitado en el servidor (o que revienta): antes cortaba el envío a
                             // todas las demás cuentas y canales de este evento.
                             LOGGER.warn("Notification failed", exception);
                             addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
+                            continue;
                         }
+                        addDelivery(deliveries, user, notificator, DELIVERY_PENDING, null);
+                        sending.add(future.handle((result, throwable) -> {
+                            if (throwable == null) {
+                                updateDelivery(deliveries, user, notificator, DELIVERY_SENT, null);
+                            } else {
+                                Throwable cause = throwable;
+                                if (cause instanceof CompletionException && cause.getCause() != null) {
+                                    cause = cause.getCause();
+                                }
+                                LOGGER.warn("Notification failed", cause);
+                                updateDelivery(deliveries, user, notificator, DELIVERY_FAILED, cause.getMessage());
+                            }
+                            return null;
+                        }));
                     }
                 });
             });
-            storeDeliveries(event, deliveries);
+            CompletableFuture.allOf(sending.toArray(new CompletableFuture[0]))
+                    .orTimeout(DELIVERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .whenComplete((result, throwable) -> storeDeliveries(event, deliveries));
         }
     }
 
@@ -213,19 +236,47 @@ public class NotificationManager {
         deliveries.putIfAbsent(user.getId() + ":" + channel, delivery);
     }
 
+    // Resultado de un envío en segundo plano; reemplaza el "pending" anotado al iniciarlo.
+    private static void updateDelivery(
+            Map<String, Map<String, Object>> deliveries, User user, String channel, String status, String error) {
+        Map<String, Object> delivery = new LinkedHashMap<>();
+        delivery.put("userId", user.getId());
+        delivery.put("channel", channel);
+        delivery.put("status", status);
+        if (error != null) {
+            delivery.put("error", error.length() > MAX_ERROR_LENGTH ? error.substring(0, MAX_ERROR_LENGTH) : error);
+        }
+        deliveries.put(user.getId() + ":" + channel, delivery);
+    }
+
     private void storeDeliveries(Event event, Map<String, Map<String, Object>> deliveries) {
         if (deliveries.isEmpty() || event.getId() == 0) {
             return;
         }
-        List<Map<String, Object>> list = new ArrayList<>(deliveries.values());
+        List<Map<String, Object>> list = new ArrayList<>();
+        synchronized (deliveries) {
+            for (Map<String, Object> delivery : deliveries.values()) {
+                if (DELIVERY_PENDING.equals(delivery.get("status"))) {
+                    delivery = new LinkedHashMap<>(delivery);
+                    delivery.put("status", DELIVERY_FAILED);
+                    delivery.put("error", "Sin respuesta en " + DELIVERY_TIMEOUT_SECONDS + " s");
+                }
+                list.add(delivery);
+            }
+        }
+        // Copia del evento: el original lo pueden estar usando otros hilos (reenvío de eventos).
+        Event stored = new Event();
+        stored.setId(event.getId());
+        stored.setEventTime(event.getEventTime());
+        stored.setAttributes(new AttributeMap(event.getAttributes()));
         if (list.size() > MAX_DELIVERIES) {
-            event.set("notifiedOmitted", list.size() - MAX_DELIVERIES);
+            stored.set("notifiedOmitted", list.size() - MAX_DELIVERIES);
             list = new ArrayList<>(list.subList(0, MAX_DELIVERIES));
         }
-        event.getAttributes().put("notified", list);
+        stored.getAttributes().put("notified", list);
         try {
             // Con la hora el UPDATE va directo a la partición del evento (tc_events es hypertable).
-            storage.updateObject(event, new Request(
+            storage.updateObject(stored, new Request(
                     new Columns.Include("attributes"),
                     new Condition.And(
                             new Condition.Equals("id", event.getId()),
@@ -261,10 +312,9 @@ public class NotificationManager {
             if (event.getMaintenanceId() != 0) {
                 eventData.setMaintenance(cacheManager.getObject(Maintenance.class, event.getMaintenanceId()));
             }
-            eventForwarder.forward(eventData, (success, throwable) -> {
-                if (!success) {
-                    LOGGER.warn("Event forwarding failed", throwable);
-                }
+            eventForwarder.forward(eventData).exceptionally(throwable -> {
+                LOGGER.warn("Event forwarding failed", throwable);
+                return null;
             });
         }
     }

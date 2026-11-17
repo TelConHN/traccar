@@ -17,8 +17,6 @@
  */
 package org.traccar.api.resource;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.core.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.BaseProtocol;
@@ -40,22 +38,24 @@ import org.traccar.model.UserRestrictions;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
 import org.traccar.storage.query.Condition;
+import org.traccar.storage.query.Order;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 @Path("commands")
@@ -105,7 +105,8 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                 Condition.merge(List.of(
                         new Condition.Permission(User.class, getUserId(), baseClass),
                         new Condition.Permission(Device.class, deviceId, baseClass)
-                ))));
+                )),
+                new Order("description")));
 
         return commands.stream().filter(command -> {
             String type = command.getType();
@@ -202,7 +203,7 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                     return protocol.getSupportedDataCommands().stream().map(Typed::new).toList();
                 }
             } else {
-                return Collections.singletonList(new Typed(Command.TYPE_CUSTOM));
+                return List.of(new Typed(Command.TYPE_CUSTOM));
             }
         } else {
             List<Typed> result = new ArrayList<>();

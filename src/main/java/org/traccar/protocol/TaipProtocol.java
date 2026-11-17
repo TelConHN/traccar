@@ -22,9 +22,9 @@ import org.traccar.CharacterDelimiterFrameDecoder;
 import org.traccar.PipelineBuilder;
 import org.traccar.TrackerServer;
 import org.traccar.config.Config;
+import org.traccar.config.Keys;
 
 import jakarta.inject.Inject;
-import org.traccar.config.Keys;
 
 public class TaipProtocol extends BaseProtocol {
 
@@ -33,7 +33,7 @@ public class TaipProtocol extends BaseProtocol {
         addServer(new TrackerServer(config, getName(), false) {
             @Override
             protected void addProtocolHandlers(PipelineBuilder pipeline, Config config) {
-                pipeline.addLast(new CharacterDelimiterFrameDecoder(1024, '<'));
+                pipeline.addLast(new CharacterDelimiterFrameDecoder(MAX_FRAME_LENGTH, '<'));
                 if (config.getBoolean(Keys.PROTOCOL_PREFIX.withPrefix(getName()))) {
                     pipeline.addLast(new TaipPrefixEncoder());
                 }

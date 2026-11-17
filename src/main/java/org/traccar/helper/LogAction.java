@@ -16,28 +16,9 @@
  */
 package org.traccar.helper;
 
-import java.beans.Introspector;
-import java.lang.reflect.Method;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Inject;
-import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +37,33 @@ import org.traccar.storage.query.Columns;
 import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
+import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
+import java.beans.Introspector;
+import java.lang.reflect.Method;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 public final class LogAction {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LogAction.class);
+
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final Storage storage;
     private final ObjectMapper objectMapper;
@@ -385,9 +390,8 @@ public final class LogAction {
         Action action = newAction(request, userId, ACTION_REPORT);
         action.set("scheduled", scheduled ? true : null);
         action.set("type", report);
-        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-        action.set("from", dateFormat.format(from));
-        action.set("to", dateFormat.format(to));
+        action.set("from", DATE_FORMAT.format(from.toInstant()));
+        action.set("to", DATE_FORMAT.format(to.toInstant()));
         action.set("devices", deviceIds.toString());
         action.set("groups", groupIds.toString());
         storeAction(action);

@@ -17,17 +17,16 @@ package org.traccar.database;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,12 +66,12 @@ public class LocaleManager {
             Path file = Files.exists(targetFile) ? targetFile : path.resolve(DEFAULT_LANGUAGE + ".json");
             if (Files.exists(file)) {
                 try (InputStream in = Files.newInputStream(file)) {
-                    return objectMapper.readValue(in, new TypeReference<>() { });
+                    return objectMapper.readValue(in, new TypeReference<>() {});
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
             } else {
-                return Collections.emptyMap();
+                return Map.of();
             }
         });
     }

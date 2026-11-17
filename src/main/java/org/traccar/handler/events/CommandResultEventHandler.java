@@ -15,15 +15,15 @@
  */
 package org.traccar.handler.events;
 
-import jakarta.inject.Inject;
 import org.traccar.model.Event;
 import org.traccar.model.Position;
+
+import jakarta.inject.Inject;
 
 public class CommandResultEventHandler extends BaseEventHandler {
 
     @Inject
-    public CommandResultEventHandler() {
-    }
+    public CommandResultEventHandler() {}
 
     @Override
     public void onPosition(Position position, Callback callback) {

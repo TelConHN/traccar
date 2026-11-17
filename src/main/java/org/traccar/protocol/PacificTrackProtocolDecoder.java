@@ -19,12 +19,12 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 
@@ -63,7 +63,7 @@ public class PacificTrackProtocolDecoder extends BaseProtocolDecoder {
         while (buf.isReadable()) {
 
             int segmentId = readBitExt(buf);
-            int segmentEnd = readBitExt(buf) + buf.readerIndex();
+            int segmentEnd = Math.max(readBitExt(buf), 0) + buf.readerIndex();
 
             switch (segmentId) {
                 case 0x01:
@@ -80,13 +80,13 @@ public class PacificTrackProtocolDecoder extends BaseProtocolDecoder {
                     position.setLongitude(buf.readUnsignedInt() / 1000000.0 - 180.0);
                     int speedAndCourse = buf.readUnsignedMedium();
                     position.setCourse(BitUtil.from(speedAndCourse, 12));
-                    position.setSpeed(UnitsConverter.knotsFromKph(BitUtil.to(speedAndCourse, 12) * 0.1));
+                    position.setSpeed(UnitsConverter.knotsFromKph(BitUtil.to(speedAndCourse, 12) / 10.0));
                     position.set(Position.KEY_INDEX, buf.readUnsignedShort());
                     break;
                 case 0x20:
                     int voltage = buf.readUnsignedMedium();
-                    position.set(Position.KEY_BATTERY, BitUtil.between(voltage, 0, 12) * 0.01);
-                    position.set(Position.KEY_POWER, BitUtil.between(voltage, 12, 24) * 0.01);
+                    position.set(Position.KEY_BATTERY, BitUtil.between(voltage, 0, 12) / 100.0);
+                    position.set(Position.KEY_POWER, BitUtil.between(voltage, 12, 24) / 100.0);
                     break;
                 case 0x92:
                     while (buf.readerIndex() < segmentEnd) {
@@ -125,7 +125,7 @@ public class PacificTrackProtocolDecoder extends BaseProtocolDecoder {
                                         Position.PREFIX_TEMP + 1, buf.readUnsignedShort() * 0.03125 - 273);
                                 default -> buf.readUnsignedShort();
                             }
-                        }  else if (fieldPrefix < 0b111) {
+                        } else if (fieldPrefix < 0b111) {
                             switch (BitUtil.to(field, 5)) {
                                 case 0b00000 -> position.set(Position.KEY_ODOMETER, buf.readUnsignedInt() * 100);
                                 case 0b00001 -> position.set(Position.KEY_HOURS, buf.readUnsignedInt() * 180);

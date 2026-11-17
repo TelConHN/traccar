@@ -21,8 +21,8 @@ import org.traccar.PipelineBuilder;
 import org.traccar.TrackerServer;
 import org.traccar.config.Config;
 
-import java.nio.ByteOrder;
 import jakarta.inject.Inject;
+import java.nio.ByteOrder;
 
 public class AutoTrackProtocol extends BaseProtocol {
 
@@ -31,7 +31,8 @@ public class AutoTrackProtocol extends BaseProtocol {
         addServer(new TrackerServer(config, getName(), false) {
             @Override
             protected void addProtocolHandlers(PipelineBuilder pipeline, Config config) {
-                pipeline.addLast(new LengthFieldBasedFrameDecoder(ByteOrder.LITTLE_ENDIAN, 1024, 5, 2, 2, 0, true));
+                pipeline.addLast(new LengthFieldBasedFrameDecoder(
+                        ByteOrder.LITTLE_ENDIAN, MAX_FRAME_LENGTH, 5, 2, 2, 0, true));
                 pipeline.addLast(new AutoTrackProtocolDecoder(AutoTrackProtocol.this));
             }
         });

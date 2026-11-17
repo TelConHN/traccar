@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 - 2022 Anton Tananaev (anton@traccar.org)
+ * Copyright 2012 - 2026 Anton Tananaev (anton@traccar.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.config.Keys;
@@ -28,19 +27,26 @@ import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
+import org.traccar.helper.model.AttributeUtil;
 import org.traccar.model.CellTower;
 import org.traccar.model.Network;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.TimeZone;
 import java.util.regex.Pattern;
 
 public class H02ProtocolDecoder extends BaseProtocolDecoder {
+
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter
+            .ofPattern("HHmmss").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter
+            .ofPattern("yyyyMMddHHmmss").withZone(ZoneOffset.UTC);
 
     public H02ProtocolDecoder(Protocol protocol) {
         super(protocol);
@@ -63,7 +69,7 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
             length = 5;
         }
 
-        result = result * 10 + BcdUtil.readInteger(buf, length) * 0.0001;
+        result = result * 10 + BcdUtil.readInteger(buf, length) / 10000.0;
 
         result /= 60;
         result += degrees;
@@ -155,7 +161,8 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
 
         processStatus(position, buf.readUnsignedInt());
 
-        if (getConfig().getBoolean(Keys.PROTOCOL_ACK.withPrefix(getProtocolName()))) {
+        if (AttributeUtil.lookup(
+                getCacheManager(), Keys.PROTOCOL_ACK.withPrefix(getProtocolName()), deviceSession.getDeviceId())) {
             sendResponse(channel, remoteAddress, id, "R12");
         }
 
@@ -181,14 +188,14 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
             .groupBegin()
             .number("-(d+)-(d+.d+),([NS]),")     // latitude
             .or()
-            .number("(d*)(dd.d+),([NS]),")       // latitude
+            .number("(d*?)(d?d.d+),([NS]),")     // latitude
             .or()
             .number("(d+)(dd)(d{4}),([NS]),")    // latitude
             .groupEnd()
             .groupBegin()
             .number("-(d+)-(d+.d+),([EW]),")     // longitude
             .or()
-            .number("(d*)(dd.d+),([EW]),")       // longitude
+            .number("(d*?)(d?d.d+),([EW]),")     // longitude
             .or()
             .number("(d+)(dd)(d{4}),([EW]),")    // longitude
             .groupEnd()
@@ -197,9 +204,10 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
             .number("(?:d+,)?")                  // battery
             .number("(?:(dd)(dd)(dd))?")         // date (ddmmyy)
             .groupBegin()
-            .expression(",[^,]*,")
-            .expression("[^,]*,")
-            .expression("[^,]*")                 // sim info
+            .text(",,")
+            .expression("[^,]*,")                // phone or ip
+            .number("(d+)")                      // iccid
+            .expression("[^,]*")                 // padding
             .groupEnd("?")
             .groupBegin()
             .number(",(x{8})")
@@ -311,9 +319,7 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
     private void sendResponse(Channel channel, SocketAddress remoteAddress, String id, String type) {
         if (channel != null && id != null) {
             String response;
-            DateFormat dateFormat = new SimpleDateFormat(type.equals("R12") ? "HHmmss" : "yyyyMMddHHmmss");
-            dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-            String time = dateFormat.format(new Date());
+            String time = (type.equals("R12") ? TIME_FORMAT : DATE_FORMAT).format(Instant.now());
             if (type.equals("R12")) {
                 response = String.format("*HQ,%s,%s,%s#", id, type, time);
             } else {
@@ -345,7 +351,8 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
 
         if (parser.hasNext() && parser.next().equals("V1")) {
             sendResponse(channel, remoteAddress, id, "V1");
-        } else if (getConfig().getBoolean(Keys.PROTOCOL_ACK.withPrefix(getProtocolName()))) {
+        } else if (AttributeUtil.lookup(
+                getCacheManager(), Keys.PROTOCOL_ACK.withPrefix(getProtocolName()), deviceSession.getDeviceId())) {
             sendResponse(channel, remoteAddress, id, "R12");
         }
 
@@ -390,6 +397,10 @@ public class H02ProtocolDecoder extends BaseProtocolDecoder {
             position.setTime(dateBuilder.getDate());
         } else {
             position.setTime(new Date());
+        }
+
+        if (parser.hasNext()) {
+            position.set(Position.KEY_ICCID, parser.next());
         }
 
         if (parser.hasNext()) {

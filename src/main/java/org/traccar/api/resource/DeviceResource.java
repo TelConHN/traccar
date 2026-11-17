@@ -15,8 +15,6 @@
  */
 package org.traccar.api.resource;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
 import org.traccar.database.CommandsManager;
 import org.traccar.database.MediaManager;
@@ -27,6 +25,7 @@ import org.traccar.model.Action;
 import org.traccar.model.Command;
 import org.traccar.model.Device;
 import org.traccar.model.DeviceAccumulators;
+import org.traccar.model.LinkedDevice;
 import org.traccar.model.ObjectOperation;
 import org.traccar.model.Position;
 import org.traccar.model.User;
@@ -39,6 +38,7 @@ import org.traccar.storage.query.Order;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
@@ -48,6 +48,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -101,6 +102,7 @@ public class DeviceResource extends BaseObjectResource<Device> {
             @QueryParam("all") boolean all, @QueryParam("userId") long userId,
             @QueryParam("uniqueId") List<String> uniqueIds,
             @QueryParam("id") List<Long> deviceIds,
+            @QueryParam("deviceId") long linkedFromDeviceId,
             @QueryParam("excludeAttributes") boolean excludeAttributes,
             @QueryParam("limit") int limit, @QueryParam("offset") int offset,
             @QueryParam("keyword") String keyword) throws StorageException {
@@ -141,6 +143,12 @@ public class DeviceResource extends BaseObjectResource<Device> {
                     permissionsService.checkUser(getUserId(), userId);
                     conditions.add(new Condition.Permission(User.class, userId, baseClass).excludeGroups());
                 }
+            }
+
+            if (linkedFromDeviceId > 0) {
+                permissionsService.checkPermission(Device.class, getUserId(), linkedFromDeviceId);
+                conditions.add(new Condition.Permission(
+                        Device.class, linkedFromDeviceId, LinkedDevice.class).excludeGroups());
             }
 
             if (keyword != null && !keyword.isEmpty()) {
@@ -527,6 +535,7 @@ public class DeviceResource extends BaseObjectResource<Device> {
             if (entity.getHours() != null) {
                 position.getAttributes().put(Position.KEY_HOURS, entity.getHours());
             }
+            position.setServerTime(new Date());
             position.setId(storage.addObject(position, new Request(new Columns.Exclude("id"))));
 
             Device device = new Device();

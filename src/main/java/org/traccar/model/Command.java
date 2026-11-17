@@ -15,9 +15,8 @@
  */
 package org.traccar.model;
 
-import org.traccar.storage.QueryIgnore;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.traccar.storage.QueryIgnore;
 import org.traccar.storage.StorageName;
 
 @StorageName("tc_commands")
@@ -60,6 +59,8 @@ public class Command extends BaseCommand {
     public static final String TYPE_SET_SPEED_LIMIT = "setSpeedLimit";
     public static final String TYPE_MODE_POWER_SAVING = "modePowerSaving";
     public static final String TYPE_MODE_DEEP_SLEEP = "modeDeepSleep";
+    public static final String TYPE_VIDEO_START = "videoStart";
+    public static final String TYPE_VIDEO_STOP = "videoStop";
 
     public static final String TYPE_ALARM_GEOFENCE = "alarmGeofence";
     public static final String TYPE_ALARM_BATTERY = "alarmBattery";
@@ -79,6 +80,7 @@ public class Command extends BaseCommand {
     public static final String KEY_MESSAGE = "message";
     public static final String KEY_ENABLE = "enable";
     public static final String KEY_DATA = "data";
+    public static final String KEY_DURATION = "duration";
     public static final String KEY_INDEX = "index";
     public static final String KEY_PHONE = "phone";
     public static final String KEY_SERVER = "server";

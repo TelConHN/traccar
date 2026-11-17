@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Anton Tananaev (anton@traccar.org)
+ * Copyright 2023 - 2026 Anton Tananaev (anton@traccar.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,20 +15,24 @@
  */
 package org.traccar.protocol;
 
+import com.fasterxml.jackson.databind.util.ByteBufferBackedInputStream;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import jakarta.json.Json;
-import jakarta.json.JsonObject;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.traccar.BaseMqttProtocolDecoder;
 import org.traccar.Protocol;
+import org.traccar.helper.DateUtil;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
 import org.traccar.session.DeviceSession;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 public class PuiProtocolDecoder extends BaseMqttProtocolDecoder {
+
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneId.systemDefault());
 
     public PuiProtocolDecoder(Protocol protocol) {
         super(protocol);
@@ -38,7 +42,7 @@ public class PuiProtocolDecoder extends BaseMqttProtocolDecoder {
     protected Object decode(DeviceSession deviceSession, MqttPublishMessage message) throws Exception {
 
         JsonObject json;
-        try (ByteBufferInputStream inputStream = new ByteBufferInputStream(message.payload().nioBuffer())) {
+        try (var inputStream = new ByteBufferBackedInputStream(message.payload().nioBuffer())) {
             json = Json.createReader(inputStream).readObject();
         }
 
@@ -51,8 +55,7 @@ public class PuiProtocolDecoder extends BaseMqttProtocolDecoder {
 
                 position.setValid(true);
 
-                DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                position.setTime(dateFormat.parse(json.getString("ts")));
+                position.setTime(DateUtil.parse(DATE_FORMAT, json.getString("ts")));
 
                 JsonObject location = json.getJsonObject("location");
                 position.setLatitude(location.getJsonNumber("lat").doubleValue());

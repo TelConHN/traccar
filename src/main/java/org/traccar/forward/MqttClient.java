@@ -15,17 +15,18 @@
  */
 package org.traccar.forward;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.UUID;
-import java.util.function.BiConsumer;
-
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5ClientBuilder;
 import com.hivemq.client.mqtt.mqtt5.message.auth.Mqtt5SimpleAuth;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5PublishResult;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+import java.util.function.BiConsumer;
 
 public class MqttClient {
 
@@ -61,7 +62,7 @@ public class MqttClient {
                 throw new IllegalArgumentException("Wrong MQTT credentials. Should be in format \"username:password\"");
             } else {
                 simpleAuth = Mqtt5SimpleAuth.builder().username(userInfo.substring(0, delimiter++))
-                        .password(userInfo.substring(delimiter).getBytes()).build();
+                        .password(userInfo.substring(delimiter).getBytes(StandardCharsets.UTF_8)).build();
             }
         }
         return simpleAuth;
@@ -69,7 +70,8 @@ public class MqttClient {
 
     public void publish(
             String pubTopic, String payload, BiConsumer<? super Mqtt5PublishResult, ? super Throwable> whenComplete) {
-        client.publishWith().topic(pubTopic).qos(MqttQos.AT_LEAST_ONCE).payload(payload.getBytes()).send()
+        client.publishWith().topic(pubTopic).qos(MqttQos.AT_LEAST_ONCE)
+                .payload(payload.getBytes(StandardCharsets.UTF_8)).send()
                 .whenComplete(whenComplete);
     }
 

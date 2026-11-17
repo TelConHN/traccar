@@ -20,11 +20,6 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import jakarta.json.Json;
-import jakarta.json.JsonNumber;
-import jakarta.json.JsonObject;
-import jakarta.json.JsonString;
-import jakarta.json.JsonValue;
 import org.traccar.BaseHttpProtocolDecoder;
 import org.traccar.Protocol;
 import org.traccar.helper.DateUtil;
@@ -33,6 +28,11 @@ import org.traccar.model.Position;
 import org.traccar.model.WifiAccessPoint;
 import org.traccar.session.DeviceSession;
 
+import jakarta.json.Json;
+import jakarta.json.JsonNumber;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonString;
+import jakarta.json.JsonValue;
 import java.io.StringReader;
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -151,8 +151,7 @@ public class TtnHttpProtocolDecoder extends BaseHttpProtocolDecoder {
             case NUMBER -> position.set(key, ((JsonNumber) value).doubleValue());
             case TRUE -> position.set(key, true);
             case FALSE -> position.set(key, false);
-            default -> {
-            }
+            default -> {}
         }
     }
 

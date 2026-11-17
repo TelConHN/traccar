@@ -17,7 +17,6 @@ package org.traccar.protocol;
 
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.DateBuilder;
@@ -28,17 +27,22 @@ import org.traccar.model.CellTower;
 import org.traccar.model.Network;
 import org.traccar.model.Position;
 import org.traccar.model.WifiAccessPoint;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.regex.Pattern;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class TrvProtocolDecoder extends BaseProtocolDecoder {
 
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter
+            .ofPattern("yyyyMMddHHmmss").withZone(ZoneId.systemDefault());
+
     private static final Set<String> IGNORE_RESPONSE = Set.of(
-        "AP12", "AP14", "AP33", "AP34", "AP40", "AP76", "AP77", "AP84", "AP85", "AP86", "AP87");
+            "AP12", "AP14", "AP33", "AP34", "AP40", "AP76", "AP77", "AP84", "AP85", "AP86", "AP87");
 
     public TrvProtocolDecoder(Protocol protocol) {
         super(protocol);
@@ -180,7 +184,7 @@ public class TrvProtocolDecoder extends BaseProtocolDecoder {
         if (channel != null) {
             String responseHeader = id + (char) (type.charAt(0) + 1) + type.substring(1);
             if (type.equals("AP00") && id.equals("IW")) {
-                String time = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+                String time = DATE_FORMAT.format(Instant.now());
                 channel.writeAndFlush(new NetworkMessage(responseHeader + "," + time + ",0#", remoteAddress));
             } else if (type.equals("AP14") && !id.equals("IW")) {
                 channel.writeAndFlush(new NetworkMessage(responseHeader + ",0.000,0.000#", remoteAddress));

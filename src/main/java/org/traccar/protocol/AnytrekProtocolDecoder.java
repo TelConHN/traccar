@@ -20,13 +20,13 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 
@@ -72,7 +72,7 @@ public class AnytrekProtocolDecoder extends BaseProtocolDecoder {
         position.setDeviceId(deviceSession.getDeviceId());
 
         position.set(Position.KEY_VERSION_FW, buf.readUnsignedShortLE());
-        position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() * 0.01);
+        position.set(Position.KEY_BATTERY, buf.readUnsignedShortLE() / 100.0);
         position.set(Position.KEY_RSSI, buf.readUnsignedByte());
 
         DateBuilder dateBuilder = new DateBuilder()

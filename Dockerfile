@@ -27,7 +27,7 @@ RUN npm run build
 
 
 # ── Etapa 2: compilar el backend (Java) ───────────────────────────────────────
-FROM eclipse-temurin:17-jdk-jammy AS backend-builder
+FROM eclipse-temurin:21-jdk-jammy AS backend-builder
 
 WORKDIR /build
 
@@ -51,7 +51,7 @@ RUN ./gradlew build -x test --no-daemon
 
 
 # ── Etapa 3: imagen de runtime (liviana) ──────────────────────────────────────
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /opt/traccar
 

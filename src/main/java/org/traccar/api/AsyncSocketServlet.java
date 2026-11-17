@@ -28,7 +28,6 @@ import org.traccar.storage.StorageException;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Duration;

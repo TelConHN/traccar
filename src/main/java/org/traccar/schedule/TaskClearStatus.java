@@ -15,12 +15,12 @@
  */
 package org.traccar.schedule;
 
-import jakarta.inject.Inject;
 import org.traccar.broadcast.BroadcastService;
 import org.traccar.helper.model.DeviceUtil;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 
+import jakarta.inject.Inject;
 import java.util.concurrent.ScheduledExecutorService;
 
 public class TaskClearStatus implements ScheduleTask {
@@ -33,11 +33,9 @@ public class TaskClearStatus implements ScheduleTask {
     }
 
     @Override
-    public void schedule(ScheduledExecutorService executor) {
-    }
+    public void schedule(ScheduledExecutorService executor) {}
 
     @Override
-    public void run() {
-    }
+    public void run() {}
 
 }

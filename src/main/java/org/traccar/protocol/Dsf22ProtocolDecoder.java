@@ -19,12 +19,12 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 import java.util.Date;
@@ -65,7 +65,7 @@ public class Dsf22ProtocolDecoder extends BaseProtocolDecoder {
             position.setTime(new Date(buf.readUnsignedIntLE() * 1000));
             position.setSpeed(UnitsConverter.knotsFromKph(buf.readUnsignedByte()));
 
-            position.set(Position.KEY_FUEL, buf.readUnsignedShortLE() * 0.001);
+            position.set(Position.KEY_FUEL, buf.readUnsignedShortLE() / 1000.0);
 
             int status = buf.readUnsignedByte();
             position.set(Position.KEY_IGNITION, BitUtil.check(status, 0));

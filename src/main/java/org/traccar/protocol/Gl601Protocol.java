@@ -16,11 +16,12 @@
 package org.traccar.protocol;
 
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import jakarta.inject.Inject;
 import org.traccar.BaseProtocol;
 import org.traccar.PipelineBuilder;
 import org.traccar.TrackerServer;
 import org.traccar.config.Config;
+
+import jakarta.inject.Inject;
 
 public class Gl601Protocol extends BaseProtocol {
 
@@ -29,7 +30,7 @@ public class Gl601Protocol extends BaseProtocol {
         addServer(new TrackerServer(config, getName(), false) {
             @Override
             protected void addProtocolHandlers(PipelineBuilder pipeline, Config config) {
-                pipeline.addLast(new LengthFieldBasedFrameDecoder(1024, 2, 2, -4, 0));
+                pipeline.addLast(new LengthFieldBasedFrameDecoder(MAX_FRAME_LENGTH, 2, 2, -4, 0));
                 pipeline.addLast(new Gl601ProtocolDecoder(Gl601Protocol.this));
             }
         });

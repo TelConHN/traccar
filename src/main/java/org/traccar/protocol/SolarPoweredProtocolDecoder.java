@@ -19,12 +19,12 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
-import org.traccar.session.DeviceSession;
 import org.traccar.Protocol;
 import org.traccar.helper.BitUtil;
 import org.traccar.helper.DateBuilder;
 import org.traccar.helper.UnitsConverter;
 import org.traccar.model.Position;
+import org.traccar.session.DeviceSession;
 
 import java.net.SocketAddress;
 
@@ -68,11 +68,11 @@ public class SolarPoweredProtocolDecoder extends BaseProtocolDecoder {
                                 .setDate(buf.readUnsignedByte(), buf.readUnsignedByte(), buf.readUnsignedByte())
                                 .setTime(buf.readUnsignedByte(), buf.readUnsignedByte(), buf.readUnsignedByte());
                         position.setTime(dateBuilder.getDate());
-                        position.setLatitude(buf.readUnsignedInt() * 0.000001);
+                        position.setLatitude(buf.readUnsignedInt() / 1000000.0);
                         if (BitUtil.check(status, 3)) {
                             position.setLatitude(-position.getLatitude());
                         }
-                        position.setLongitude(buf.readUnsignedInt() * 0.000001);
+                        position.setLongitude(buf.readUnsignedInt() / 1000000.0);
                         if (BitUtil.check(status, 2)) {
                             position.setLongitude(-position.getLongitude());
                         }
@@ -83,7 +83,7 @@ public class SolarPoweredProtocolDecoder extends BaseProtocolDecoder {
                         } else {
                             position.set(Position.KEY_DEVICE_TEMP, BitUtil.to(temperature, 7));
                         }
-                        position.set(Position.KEY_BATTERY, buf.readUnsignedByte() * 0.02);
+                        position.set(Position.KEY_BATTERY, buf.readUnsignedByte() / 50.0);
                         position.setCourse(buf.readUnsignedByte());
                         break;
                     case 0x82:

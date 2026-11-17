@@ -15,15 +15,14 @@
  */
 package org.traccar.api.resource;
 
+import org.traccar.api.ExtendedObjectResource;
+import org.traccar.model.Product;
+
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-
 import java.util.List;
-
-import org.traccar.api.ExtendedObjectResource;
-import org.traccar.model.Product;
 
 /** Igual que /api/drivers: lista (con ?keyword=, ?deviceId=, ?all=true), alta, edición y baja. */
 @Path("products")
