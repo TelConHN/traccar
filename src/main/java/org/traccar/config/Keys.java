@@ -1000,6 +1000,15 @@ public final class Keys {
             true);
 
     /**
+     * Validity of the password reset link in seconds. The link carries a token that also opens a session,
+     * so it should not live for the default token lifetime (7 days).
+     */
+    public static final ConfigKey<Long> WEB_RESET_PASSWORD_TOKEN_VALIDITY = new LongConfigKey(
+            "web.resetPasswordTokenValidity",
+            List.of(KeyType.CONFIG),
+            3600L);
+
+    /**
      * A token to log in as a virtual admin account. Can be used to restore access in case of issues with regular
      * admin login. For example, if a password is lost and can't be restored.
      */

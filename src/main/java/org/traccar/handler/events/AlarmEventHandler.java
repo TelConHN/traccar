@@ -26,22 +26,30 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-public class AlarmEventHandler extends BasePositionEventHandler {
+/**
+ * Alarms are reported by the device itself (SOS, power cut, tamper), so they are processed even when the
+ * position carries an older fix time than the last one stored. Upstream (2d48c3828) skipped them in that
+ * case, which silently dropped the SOS of portable trackers that send it without a fresh GPS fix: they
+ * repeat the last fix time, or 2000-01-01 when they never had one.
+ */
+public class AlarmEventHandler extends BaseEventHandler {
 
+    private final CacheManager cacheManager;
     private final boolean ignoreDuplicates;
 
     @Inject
     public AlarmEventHandler(Config config, CacheManager cacheManager) {
-        super(cacheManager);
+        this.cacheManager = cacheManager;
         ignoreDuplicates = config.getBoolean(Keys.EVENT_IGNORE_DUPLICATE_ALERTS);
     }
 
     @Override
-    protected void onPosition(Position position, Position lastPosition, Callback callback) {
+    public void onPosition(Position position, Callback callback) {
         String alarmString = position.getString(Position.KEY_ALARM);
         if (alarmString != null) {
             Set<String> alarms = new HashSet<>(Arrays.asList(alarmString.split(",")));
             if (ignoreDuplicates) {
+                Position lastPosition = cacheManager.getPosition(position.getDeviceId());
                 if (lastPosition != null) {
                     String lastAlarmString = lastPosition.getString(Position.KEY_ALARM);
                     if (lastAlarmString != null) {

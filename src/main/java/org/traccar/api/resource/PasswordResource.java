@@ -17,6 +17,8 @@ package org.traccar.api.resource;
 
 import org.traccar.api.BaseResource;
 import org.traccar.api.signature.TokenManager;
+import org.traccar.config.Config;
+import org.traccar.config.Keys;
 import org.traccar.helper.LogAction;
 import org.traccar.mail.MailManager;
 import org.traccar.model.User;
@@ -39,6 +41,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 
@@ -46,6 +49,9 @@ import java.util.concurrent.ExecutionException;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
 public class PasswordResource extends BaseResource {
+
+    @Inject
+    private Config config;
 
     @Inject
     private MailManager mailManager;
@@ -72,6 +78,9 @@ public class PasswordResource extends BaseResource {
                 new Columns.All(), new Condition.Equals("LOWER(email)", email.toLowerCase(Locale.ROOT))));
         if (user != null) {
             var velocityContext = textTemplateFormatter.prepareContext(permissionsService.getServer(), user);
+            long validity = config.getLong(Keys.WEB_RESET_PASSWORD_TOKEN_VALIDITY);
+            velocityContext.put("token", tokenManager.generateToken(
+                    user.getId(), new Date(System.currentTimeMillis() + validity * 1000)));
             var fullMessage = textTemplateFormatter.formatMessage(velocityContext, "passwordReset", false);
             mailManager.sendMessage(user, true, fullMessage.subject(), fullMessage.body()).get();
         }
