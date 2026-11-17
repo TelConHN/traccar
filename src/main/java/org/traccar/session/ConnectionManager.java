@@ -49,6 +49,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -383,6 +384,67 @@ public class ConnectionManager implements BroadcastInterface {
         void onUpdatePosition(Position position);
         void onUpdateEvent(Event event);
         void onUpdateLog(LogRecord record);
+    }
+
+    private synchronized boolean hasListeners(long userId) {
+        var set = listeners.get(userId);
+        return set != null && !set.isEmpty();
+    }
+
+    /**
+     * Reload the devices a connected user can see after a permission or group change, so live updates
+     * start for newly visible devices (sent right away with their latest position) and stop for removed ones.
+     */
+    public void refreshUserDevices(long userId) throws StorageException {
+        if (!hasListeners(userId)) {
+            return;
+        }
+        var devices = storage.getObjects(Device.class, new Request(
+                new Columns.All(), new Condition.Permission(User.class, userId, Device.class)));
+        var added = applyUserDevices(userId, devices);
+        for (Device device : added) {
+            Position position = null;
+            if (device.getPositionId() > 0) {
+                position = storage.getObject(Position.class, new Request(
+                        new Columns.All(), new Condition.Equals("id", device.getPositionId())));
+            }
+            sendToUser(userId, device, position);
+        }
+    }
+
+    public void refreshAllUserDevices() throws StorageException {
+        Set<Long> userIds;
+        synchronized (this) {
+            userIds = new HashSet<>(listeners.keySet());
+        }
+        for (long userId : userIds) {
+            refreshUserDevices(userId);
+        }
+    }
+
+    private synchronized List<Device> applyUserDevices(long userId, List<Device> devices) {
+        var set = listeners.get(userId);
+        if (set == null || set.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> before = userDevices.getOrDefault(userId, Set.of());
+        var added = devices.stream().filter(device -> !before.contains(device.getId())).toList();
+        removeUserDevices(userId);
+        userDevices.put(userId, devices.stream().map(BaseModel::getId).collect(Collectors.toSet()));
+        devices.forEach(device -> deviceUsers.computeIfAbsent(device.getId(), id -> new HashSet<>()).add(userId));
+        return added;
+    }
+
+    private synchronized void sendToUser(long userId, Device device, Position position) {
+        if (!userDevices.getOrDefault(userId, Set.of()).contains(device.getId())) {
+            return;
+        }
+        for (UpdateListener listener : listeners.getOrDefault(userId, Set.of())) {
+            listener.onUpdateDevice(device);
+            if (position != null) {
+                listener.onUpdatePosition(position);
+            }
+        }
     }
 
     private void removeUserDevices(long userId) {

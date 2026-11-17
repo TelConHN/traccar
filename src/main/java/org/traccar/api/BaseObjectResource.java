@@ -23,7 +23,9 @@ import org.traccar.api.security.ServiceAccountUser;
 import org.traccar.model.ObjectOperation;
 import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
+import org.traccar.model.Device;
 import org.traccar.model.Group;
+import org.traccar.model.GroupedModel;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
 import org.traccar.session.ConnectionManager;
@@ -92,6 +94,10 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
             connectionManager.invalidatePermission(true, User.class, getUserId(), baseClass, entity.getId(), true);
             actionLogger.link(request, getUserId(), User.class, getUserId(), baseClass, entity.getId());
         }
+        // A device created inside a group is visible right away to the users of that group.
+        if (entity instanceof Device device && device.getGroupId() > 0) {
+            connectionManager.refreshAllUserDevices();
+        }
 
         return Response.ok(entity).build();
     }
@@ -142,6 +148,12 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         }
         cacheManager.invalidateObject(true, entity.getClass(), entity.getId(), ObjectOperation.UPDATE);
         actionLogger.edit(request, getUserId(), stored, entity);
+        // Moving a device or a group to another group changes which devices users see through groups.
+        if ((entity instanceof Device || entity instanceof Group)
+                && stored instanceof GroupedModel before && entity instanceof GroupedModel after
+                && before.getGroupId() != after.getGroupId()) {
+            connectionManager.refreshAllUserDevices();
+        }
 
         return Response.ok(entity).build();
     }
@@ -158,6 +170,9 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         cacheManager.invalidateObject(true, baseClass, id, ObjectOperation.DELETE);
 
         actionLogger.remove(request, getUserId(), baseClass, id, stored);
+        if (baseClass == Group.class) {
+            connectionManager.refreshAllUserDevices();
+        }
 
         return Response.noContent().build();
     }

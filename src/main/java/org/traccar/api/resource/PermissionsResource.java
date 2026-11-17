@@ -22,9 +22,11 @@ import org.traccar.api.BaseResource;
 import org.traccar.helper.LogAction;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
+import org.traccar.model.Group;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
 import org.traccar.model.UserRestrictions;
+import org.traccar.session.ConnectionManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -42,6 +44,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +56,9 @@ public class PermissionsResource  extends BaseResource {
 
     @Inject
     private CacheManager cacheManager;
+
+    @Inject
+    private ConnectionManager connectionManager;
 
     @Inject
     private LogAction actionLogger;
@@ -77,15 +83,32 @@ public class PermissionsResource  extends BaseResource {
         }
     }
 
+    // Links that change which devices a user sees: the user's open connections start or stop
+    // receiving those devices right away instead of after reconnecting.
+    private void refreshConnections(Set<Long> userIds) throws StorageException {
+        for (long userId : userIds) {
+            connectionManager.refreshUserDevices(userId);
+        }
+    }
+
+    private static boolean changesVisibleDevices(Permission permission) {
+        return permission.getOwnerClass() == User.class
+                && (permission.getPropertyClass() == Device.class || permission.getPropertyClass() == Group.class);
+    }
+
     @Path("bulk")
     @POST
     public Response add(List<LinkedHashMap<String, Long>> entities) throws Exception {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getReadonly);
         checkPermissionTypes(entities);
+        Set<Long> affectedUsers = new HashSet<>();
         for (LinkedHashMap<String, Long> entity: entities) {
             Permission permission = new Permission(entity);
             checkPermission(permission);
             storage.addPermission(permission);
+            if (changesVisibleDevices(permission)) {
+                affectedUsers.add(permission.getOwnerId());
+            }
             cacheManager.invalidatePermission(
                     true,
                     permission.getOwnerClass(), permission.getOwnerId(),
@@ -98,6 +121,7 @@ public class PermissionsResource  extends BaseResource {
                 autoAssignGeofences(permission.getOwnerId(), permission.getPropertyId());
             }
         }
+        refreshConnections(affectedUsers);
         return Response.noContent().build();
     }
 
@@ -131,10 +155,14 @@ public class PermissionsResource  extends BaseResource {
     public Response remove(List<LinkedHashMap<String, Long>> entities) throws Exception {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getReadonly);
         checkPermissionTypes(entities);
+        Set<Long> affectedUsers = new HashSet<>();
         for (LinkedHashMap<String, Long> entity: entities) {
             Permission permission = new Permission(entity);
             checkPermission(permission);
             storage.removePermission(permission);
+            if (changesVisibleDevices(permission)) {
+                affectedUsers.add(permission.getOwnerId());
+            }
             cacheManager.invalidatePermission(
                     true,
                     permission.getOwnerClass(), permission.getOwnerId(),
@@ -144,6 +172,7 @@ public class PermissionsResource  extends BaseResource {
                     permission.getOwnerClass(), permission.getOwnerId(),
                     permission.getPropertyClass(), permission.getPropertyId());
         }
+        refreshConnections(affectedUsers);
         return Response.noContent().build();
     }
 
