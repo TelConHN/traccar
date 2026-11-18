@@ -23,14 +23,15 @@ import org.traccar.session.cache.CacheManager;
 
 import jakarta.inject.Inject;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
  * Alarms are reported by the device itself (SOS, power cut, tamper), so they are processed even when the
  * position carries an older fix time than the last one stored. Upstream (2d48c3828) skipped them in that
- * case, which silently dropped the SOS of portable trackers that send it without a fresh GPS fix: they
- * repeat the last fix time, or 2000-01-01 when they never had one.
+ * case, which silently dropped the SOS of portable trackers that send it without a fresh GPS fix: their
+ * clock then reports a date from years ago (2019 and 2000 seen in production).
  */
 public class AlarmEventHandler extends BaseEventHandler {
 
@@ -48,8 +49,13 @@ public class AlarmEventHandler extends BaseEventHandler {
         String alarmString = position.getString(Position.KEY_ALARM);
         if (alarmString != null) {
             Set<String> alarms = new HashSet<>(Arrays.asList(alarmString.split(",")));
+            Position lastPosition = cacheManager.getPosition(position.getDeviceId());
+            // A fix time behind the last known one means the device clock is not usable (the portables
+            // send a date from years ago without GPS). The event then takes the server time; otherwise
+            // it would be older than notificator.timeThreshold and nobody would be notified.
+            boolean clockBehind = lastPosition != null && lastPosition.getFixTime() != null
+                    && position.getFixTime() != null && position.getFixTime().before(lastPosition.getFixTime());
             if (ignoreDuplicates) {
-                Position lastPosition = cacheManager.getPosition(position.getDeviceId());
                 if (lastPosition != null) {
                     String lastAlarmString = lastPosition.getString(Position.KEY_ALARM);
                     if (lastAlarmString != null) {
@@ -60,6 +66,9 @@ public class AlarmEventHandler extends BaseEventHandler {
             }
             for (String alarm : alarms) {
                 Event event = new Event(Event.TYPE_ALARM, position);
+                if (clockBehind) {
+                    event.setEventTime(position.getServerTime() != null ? position.getServerTime() : new Date());
+                }
                 event.set(Position.KEY_ALARM, alarm);
                 callback.eventDetected(event);
             }

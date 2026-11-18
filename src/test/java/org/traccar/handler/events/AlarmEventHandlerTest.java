@@ -13,6 +13,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,12 +47,36 @@ public class AlarmEventHandlerTest extends BaseTest {
 
         Position position = new Position();
         position.setDeviceId(1);
-        position.setFixTime(new Date(0));
+        position.setTime(new Date(0));
         position.addAlarm(Position.ALARM_SOS);
         List<Event> events = new ArrayList<>();
         alarmEventHandler.analyzePosition(position, events::add);
         assertEquals(1, events.size());
         assertEquals(Position.ALARM_SOS, events.get(0).getString(Position.KEY_ALARM));
+        // The device clock is behind, so the event takes the server time and can still be notified.
+        assertTrue(System.currentTimeMillis() - events.get(0).getEventTime().getTime() < 60_000);
+
+    }
+
+    @Test
+    public void testBufferedAlarmKeepsDeviceTime() {
+
+        Position last = new Position();
+        last.setDeviceId(1);
+        last.setFixTime(new Date(1_000_000_000_000L));
+        CacheManager cacheManager = mock(CacheManager.class);
+        when(cacheManager.getPosition(1)).thenReturn(last);
+
+        AlarmEventHandler alarmEventHandler = new AlarmEventHandler(new Config(), cacheManager);
+
+        Position position = new Position();
+        position.setDeviceId(1);
+        position.setTime(new Date(1_000_000_060_000L));
+        position.addAlarm(Position.ALARM_SOS);
+        List<Event> events = new ArrayList<>();
+        alarmEventHandler.analyzePosition(position, events::add);
+        assertEquals(1, events.size());
+        assertEquals(1_000_000_060_000L, events.get(0).getEventTime().getTime());
 
     }
 
