@@ -30,6 +30,8 @@ import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.Geofence;
 import org.traccar.model.Maintenance;
+import org.traccar.model.Notification;
+import org.traccar.model.Permission;
 import org.traccar.model.Position;
 import org.traccar.model.User;
 import org.traccar.notification.NotificatorManager;
@@ -118,6 +120,12 @@ public class NotificationManager {
             return;
         }
 
+        Geofence allDevices = allDevicesGeofence(event);
+        if (allDevices != null) {
+            notifyAllDevicesGeofence(event, position, allDevices);
+            return;
+        }
+
         var notifications = cacheManager.getDeviceNotifications(event.getDeviceId()).stream()
                 .filter(notification -> notification.getType().equals(event.getType()))
                 .filter(notification -> {
@@ -155,61 +163,164 @@ public class NotificationManager {
                 notifications.size());
 
         if (!notifications.isEmpty()) {
-            if (position != null && position.getAddress() == null && geocodeOnRequest && geocoder != null) {
-                position.setAddress(geocoder.getAddress(position.getLatitude(), position.getLongitude(), null));
-            }
+            geocodeIfNeeded(position);
 
             boolean skipAdministrators = geofenceSkipsAdministrators(event);
             Map<String, Map<String, Object>> deliveries = Collections.synchronizedMap(new LinkedHashMap<>());
             List<CompletableFuture<Void>> sending = new ArrayList<>();
             notifications.forEach(notification -> {
                 cacheManager.getNotificationUsers(notification.getId(), event.getDeviceId()).forEach(user -> {
-                    if (blockedUsers.contains(user.getId()) || user.getDisabled()) {
-                        LOGGER.info("User {} notification blocked", user.getId());
-                        addDelivery(deliveries, user, null, DELIVERY_BLOCKED, null);
+                    if (skipAdministrators && user.getAdministrator()
+                            && !blockedUsers.contains(user.getId()) && !user.getDisabled()) {
                         return;
                     }
-                    if (skipAdministrators && user.getAdministrator()) {
-                        return;
-                    }
-                    for (String notificator : notification.getNotificatorsTypes()) {
-                        String skipped = skippedReason(notificator, user);
-                        if (skipped != null) {
-                            addDelivery(deliveries, user, notificator, skipped, null);
-                            continue;
-                        }
-                        CompletableFuture<Void> future;
-                        try {
-                            future = notificatorManager.getNotificator(notificator)
-                                    .sendAsync(notification, user, event, position);
-                        } catch (RuntimeException exception) {
-                            // Canal no habilitado en el servidor (o que revienta): antes cortaba el envío a
-                            // todas las demás cuentas y canales de este evento.
-                            LOGGER.warn("Notification failed", exception);
-                            addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
-                            continue;
-                        }
-                        addDelivery(deliveries, user, notificator, DELIVERY_PENDING, null);
-                        sending.add(future.handle((result, throwable) -> {
-                            if (throwable == null) {
-                                updateDelivery(deliveries, user, notificator, DELIVERY_SENT, null);
-                            } else {
-                                Throwable cause = throwable;
-                                if (cause instanceof CompletionException && cause.getCause() != null) {
-                                    cause = cause.getCause();
-                                }
-                                LOGGER.warn("Notification failed", cause);
-                                updateDelivery(deliveries, user, notificator, DELIVERY_FAILED, cause.getMessage());
-                            }
-                            return null;
-                        }));
-                    }
+                    deliver(notification, user, event, position, deliveries, sending);
                 });
             });
-            CompletableFuture.allOf(sending.toArray(new CompletableFuture[0]))
-                    .orTimeout(DELIVERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                    .whenComplete((result, throwable) -> storeDeliveries(event, deliveries));
+            finishDeliveries(event, deliveries, sending);
         }
+    }
+
+    private void geocodeIfNeeded(Position position) {
+        if (position != null && position.getAddress() == null && geocodeOnRequest && geocoder != null) {
+            position.setAddress(geocoder.getAddress(position.getLatitude(), position.getLongitude(), null));
+        }
+    }
+
+    private void deliver(
+            Notification notification, User user, Event event, Position position,
+            Map<String, Map<String, Object>> deliveries, List<CompletableFuture<Void>> sending) {
+        if (blockedUsers.contains(user.getId()) || user.getDisabled()) {
+            LOGGER.info("User {} notification blocked", user.getId());
+            addDelivery(deliveries, user, null, DELIVERY_BLOCKED, null);
+            return;
+        }
+        for (String notificator : notification.getNotificatorsTypes()) {
+            String skipped = skippedReason(notificator, user);
+            if (skipped != null) {
+                addDelivery(deliveries, user, notificator, skipped, null);
+                continue;
+            }
+            CompletableFuture<Void> future;
+            try {
+                future = notificatorManager.getNotificator(notificator)
+                        .sendAsync(notification, user, event, position);
+            } catch (RuntimeException exception) {
+                // Canal no habilitado en el servidor (o que revienta): antes cortaba el envío a
+                // todas las demás cuentas y canales de este evento.
+                LOGGER.warn("Notification failed", exception);
+                addDelivery(deliveries, user, notificator, DELIVERY_FAILED, exception.getMessage());
+                continue;
+            }
+            addDelivery(deliveries, user, notificator, DELIVERY_PENDING, null);
+            sending.add(future.handle((result, throwable) -> {
+                if (throwable == null) {
+                    updateDelivery(deliveries, user, notificator, DELIVERY_SENT, null);
+                } else {
+                    Throwable cause = throwable;
+                    if (cause instanceof CompletionException && cause.getCause() != null) {
+                        cause = cause.getCause();
+                    }
+                    LOGGER.warn("Notification failed", cause);
+                    updateDelivery(deliveries, user, notificator, DELIVERY_FAILED, cause.getMessage());
+                }
+                return null;
+            }));
+        }
+    }
+
+    private void finishDeliveries(
+            Event event, Map<String, Map<String, Object>> deliveries, List<CompletableFuture<Void>> sending) {
+        CompletableFuture.allOf(sending.toArray(new CompletableFuture[0]))
+                .orTimeout(DELIVERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .whenComplete((result, throwable) -> storeDeliveries(event, deliveries));
+    }
+
+    // Entrada/salida de una geocerca que vigila todos los carros (Geofence.KEY_ALL_DEVICES).
+    private Geofence allDevicesGeofence(Event event) {
+        if (event.getGeofenceId() == 0
+                || !(event.getType().equals(Event.TYPE_GEOFENCE_ENTER)
+                        || event.getType().equals(Event.TYPE_GEOFENCE_EXIT))) {
+            return null;
+        }
+        Geofence geofence = cacheManager.getObject(Geofence.class, event.getGeofenceId());
+        return geofence != null && geofence.watchesAllDevices() ? geofence : null;
+    }
+
+    // Una geocerca que vigila todos los carros es de Telcon. Avisan solo las notificaciones que la eligen
+    // en «Geocercas», por cualquier carro (el administrador no necesita tener el carro vinculado), y
+    // solo a cuentas de administrador: el cliente nunca recibe ese aviso, aunque tenga las suyas.
+    private void notifyAllDevicesGeofence(Event event, Position position, Geofence geofence) {
+        if (clientSuspended(event.getDeviceId())) {
+            event.set(Event.KEY_CLIENT_SUSPENDED, true);
+        }
+        Map<String, Map<String, Object>> deliveries = Collections.synchronizedMap(new LinkedHashMap<>());
+        List<CompletableFuture<Void>> sending = new ArrayList<>();
+        int matched = 0;
+        boolean geocoded = false;
+        try {
+            for (Notification notification : storage.getObjects(Notification.class, new Request(
+                    new Columns.All(), new Condition.Equals("type", event.getType())))) {
+                if (!parseIds(notification.getString("geofenceIds")).contains(geofence.getId())
+                        || !calendarAllows(notification.getCalendarId(), event)) {
+                    continue;
+                }
+                matched += 1;
+                var links = storage.getPermissions(User.class, 0, Notification.class, notification.getId());
+                for (Permission link : links) {
+                    User user = storage.getObject(User.class, new Request(
+                            new Columns.All(), new Condition.Equals("id", link.getOwnerId())));
+                    if (user != null && user.getAdministrator()) {
+                        if (!geocoded) {
+                            geocodeIfNeeded(position);
+                            geocoded = true;
+                        }
+                        deliver(notification, user, event, position, deliveries, sending);
+                    }
+                }
+            }
+        } catch (StorageException error) {
+            LOGGER.warn("Geofence notification load error", error);
+        }
+        LOGGER.info("Event geofence {} type {} all devices, notifications: {}",
+                geofence.getId(), event.getType(), matched);
+        finishDeliveries(event, deliveries, sending);
+    }
+
+    private boolean calendarAllows(long calendarId, Event event) throws StorageException {
+        if (calendarId == 0) {
+            return true;
+        }
+        Calendar calendar = cacheManager.getObject(Calendar.class, calendarId);
+        if (calendar == null) {
+            calendar = storage.getObject(Calendar.class, new Request(
+                    new Columns.All(), new Condition.Equals("id", calendarId)));
+        }
+        return calendar == null || calendar.checkMoment(event.getEventTime());
+    }
+
+    // Suspendido = el carro tiene cuentas de cliente y todas están deshabilitadas (así suspende el panel).
+    private boolean clientSuspended(long deviceId) {
+        var clients = cacheManager.getDeviceObjects(deviceId, User.class).stream()
+                .filter(user -> !user.getAdministrator())
+                .toList();
+        return !clients.isEmpty() && clients.stream().allMatch(User::getDisabled);
+    }
+
+    private static List<Long> parseIds(String value) {
+        List<Long> ids = new ArrayList<>();
+        if (value != null) {
+            for (String part : value.split(",")) {
+                try {
+                    if (!part.isBlank()) {
+                        ids.add(Long.parseLong(part.trim()));
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Un valor raro en el atributo no debe tumbar el aviso a los demás.
+                }
+            }
+        }
+        return ids;
     }
 
     // Casos en que el canal no manda nada y no da error: sin esto se verían como "enviado".

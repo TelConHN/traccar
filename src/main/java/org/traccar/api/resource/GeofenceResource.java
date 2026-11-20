@@ -20,6 +20,7 @@ import org.traccar.helper.LogAction;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
 import org.traccar.model.Group;
+import org.traccar.model.Notification;
 import org.traccar.model.ObjectOperation;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
@@ -32,6 +33,7 @@ import org.traccar.storage.query.Request;
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -69,6 +71,7 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
         super(Geofence.class, "name", List.of("name"));
     }
 
+    // Lo de "solo administrador" (Geofence.ADMIN_ONLY_KEYS) se borra si lo manda un cliente.
     // La que crea un cliente desde su cuenta no avisa a administración. La que crea un
     // administrador sí (es de Telcon); al pasarla a un cliente el formulario apaga el aviso.
     // El agregado automático se prende después, desde el panel de asignaciones.
@@ -76,11 +79,18 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
     @POST
     public Response add(Geofence entity) throws Exception {
         if (permissionsService.notAdmin(getUserId())) {
+            Geofence.ADMIN_ONLY_KEYS.forEach(entity.getAttributes()::remove);
             entity.getAttributes().put(Geofence.KEY_NOTIFY_ADMINISTRATORS, false);
         }
         entity.getAttributes().remove(Geofence.KEY_AUTO_USERS);
         entity.getAttributes().put(Geofence.KEY_CREATED_BY, getUserId());
-        return super.add(entity);
+        markAllDevicesSince(entity, null);
+        Response response = super.add(entity);
+        if (entity.watchesAllDevices()) {
+            // Sin vínculo a ningún carro no entra sola a la caché: hay que avisarle que existe.
+            cacheManager.invalidateObject(true, Geofence.class, entity.getId(), ObjectOperation.ADD);
+        }
+        return response;
     }
 
     // "creadoPor" lo fija el servidor; el aviso a administración y el agregado automático
@@ -95,8 +105,7 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
         if (stored != null) {
             List<String> protectedKeys = new ArrayList<>(List.of(Geofence.KEY_CREATED_BY));
             if (permissionsService.notAdmin(getUserId())) {
-                protectedKeys.add(Geofence.KEY_NOTIFY_ADMINISTRATORS);
-                protectedKeys.add(Geofence.KEY_AUTO_USERS);
+                protectedKeys.addAll(Geofence.ADMIN_ONLY_KEYS);
             }
             for (String key : protectedKeys) {
                 if (stored.hasAttribute(key)) {
@@ -106,7 +115,39 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
                 }
             }
         }
+        markAllDevicesSince(entity, stored);
         return super.update(entity);
+    }
+
+    // Desde cuándo vigila todos los carros. Lo pone el servidor: al encenderla, los carros que ya
+    // estaban adentro no cuentan como "entró" (serían cien avisos de golpe), ver GeofenceEventHandler.
+    private static void markAllDevicesSince(Geofence entity, Geofence stored) {
+        if (!entity.watchesAllDevices()) {
+            entity.getAttributes().remove(Geofence.KEY_ALL_DEVICES_SINCE);
+        } else if (stored != null && stored.watchesAllDevices()
+                && stored.hasAttribute(Geofence.KEY_ALL_DEVICES_SINCE)) {
+            entity.getAttributes().put(
+                    Geofence.KEY_ALL_DEVICES_SINCE, stored.getLong(Geofence.KEY_ALL_DEVICES_SINCE));
+        } else {
+            entity.getAttributes().put(Geofence.KEY_ALL_DEVICES_SINCE, System.currentTimeMillis());
+        }
+    }
+
+    // Las notificaciones que la geocerca creó desde su pantalla no sirven sin ella: se van con ella.
+    @Override
+    @Path("{id}")
+    @DELETE
+    public Response remove(@PathParam("id") long id) throws Exception {
+        Response response = super.remove(id);
+        for (Notification notification : storage.getObjects(Notification.class, new Request(new Columns.All()))) {
+            if (notification.getLong(Geofence.KEY_NOTIFICATION_OWNER) == id) {
+                storage.removeObject(Notification.class, new Request(
+                        new Condition.Equals("id", notification.getId())));
+                cacheManager.invalidateObject(true, Notification.class, notification.getId(), ObjectOperation.DELETE);
+                actionLogger.remove(request, getUserId(), Notification.class, notification.getId(), notification);
+            }
+        }
+        return response;
     }
 
     // Todo lo necesario para responder "¿a quién y a qué carros está asignada cada geocerca?"

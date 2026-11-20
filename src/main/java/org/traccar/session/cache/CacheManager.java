@@ -51,6 +51,7 @@ import jakarta.inject.Singleton;
 import java.util.Date;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,13 +77,32 @@ public class CacheManager implements BroadcastInterface {
     private final Map<Long, ConcurrentLinkedDeque<Position>> devicePositions = new ConcurrentHashMap<>();
     private final Map<Long, HashSet<Object>> deviceReferences = new ConcurrentHashMap<>();
 
+    // Geocercas que vigilan todos los carros (Geofence.KEY_ALL_DEVICES). No cuelgan de ningún carro
+    // en el grafo, así que se guardan aparte y se suman a las de cada carro.
+    private final Map<Long, Geofence> allDevicesGeofences = new ConcurrentHashMap<>();
+
     @Inject
     public CacheManager(Config config, Storage storage, BroadcastService broadcastService) throws StorageException {
         this.config = config;
         this.storage = storage;
         this.broadcastService = broadcastService;
         server = storage.getObject(Server.class, new Request(new Columns.All()));
+        for (Geofence geofence : storage.getObjects(Geofence.class, new Request(new Columns.All()))) {
+            if (geofence.watchesAllDevices()) {
+                allDevicesGeofences.put(geofence.getId(), geofence);
+            }
+        }
         broadcastService.registerListener(this);
+    }
+
+    private void refreshAllDevicesGeofence(long id, ObjectOperation operation) throws StorageException {
+        Geofence geofence = operation == ObjectOperation.DELETE ? null : storage.getObject(Geofence.class,
+                new Request(new Columns.All(), new Condition.Equals("id", id)));
+        if (geofence != null && geofence.watchesAllDevices()) {
+            allDevicesGeofences.put(id, geofence);
+        } else {
+            allDevicesGeofences.remove(id);
+        }
     }
 
     @Override
@@ -95,12 +115,23 @@ public class CacheManager implements BroadcastInterface {
     }
 
     public <T extends BaseModel> T getObject(Class<T> clazz, long id) {
-        return graph.getObject(clazz, id);
+        T object = graph.getObject(clazz, id);
+        if (object == null && clazz.equals(Geofence.class)) {
+            return clazz.cast(allDevicesGeofences.get(id));
+        }
+        return object;
     }
 
     public <T extends BaseModel> Set<T> getDeviceObjects(long deviceId, Class<T> clazz) {
-        return graph.getObjects(Device.class, deviceId, clazz, Set.of(Group.class), true)
-                .collect(Collectors.toUnmodifiableSet());
+        var linked = graph.getObjects(Device.class, deviceId, clazz, Set.of(Group.class), true);
+        if (clazz.equals(Geofence.class) && !allDevicesGeofences.isEmpty()) {
+            // Por id: si además está asignada a mano al carro, no debe contar dos veces.
+            Map<Long, T> byId = new LinkedHashMap<>();
+            linked.forEach(object -> byId.put(object.getId(), object));
+            allDevicesGeofences.values().forEach(geofence -> byId.putIfAbsent(geofence.getId(), clazz.cast(geofence)));
+            return Set.copyOf(byId.values());
+        }
+        return linked.collect(Collectors.toUnmodifiableSet());
     }
 
     public Position getPosition(long deviceId) {
@@ -236,6 +267,9 @@ public class CacheManager implements BroadcastInterface {
         }
 
         synchronized (this) {
+            if (clazz.equals(Geofence.class)) {
+                refreshAllDevicesGeofence(id, operation);
+            }
             if (operation == ObjectOperation.DELETE) {
                 if (clazz.equals(Device.class)) {
                     removeLinkedDevices(id);

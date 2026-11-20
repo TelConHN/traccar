@@ -39,6 +39,9 @@ public class Event extends Message {
 
     public static final String ALL_EVENTS = "allEvents";
 
+    // Atributo del evento: el carro es de un cliente con la cuenta suspendida. Lo marcan las plantillas.
+    public static final String KEY_CLIENT_SUSPENDED = "clienteSuspendido";
+
     public static final String TYPE_COMMAND_RESULT = "commandResult";
 
     public static final String TYPE_DEVICE_ONLINE = "deviceOnline";

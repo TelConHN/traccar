@@ -81,7 +81,17 @@ public class GeofenceEventHandler extends BasePositionEventHandler {
         }
         for (long geofenceId : newGeofences) {
             Geofence geofence = cacheManager.getObject(Geofence.class, geofenceId);
+            if (geofence != null && geofence.watchesAllDevices() && !watchedBefore(geofence, lastPosition)) {
+                // Recién encendida "todos los carros": el carro ya estaba adentro, no acaba de entrar.
+                continue;
+            }
             handleEvent(Event.TYPE_GEOFENCE_ENTER, position, geofence, callback);
         }
+    }
+
+    private static boolean watchedBefore(Geofence geofence, Position lastPosition) {
+        return lastPosition != null
+                && lastPosition.getServerTime() != null
+                && lastPosition.getServerTime().getTime() >= geofence.getLong(Geofence.KEY_ALL_DEVICES_SINCE);
     }
 }
